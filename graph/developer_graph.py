@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, START, END
 from tools.developer_tool import generate_code_files, correct_code_with_feedback, \
     save_files_locally
 from tools.utils import log_activity
-from ui.ui import workflow_status, workflow_status_lock
+from UI.ui import workflow_status, workflow_status_lock
 import logging
 
 logger = logging.getLogger(__name__)

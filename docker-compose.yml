@@ -5,7 +5,7 @@ services:
     build: .
     ports:
       - "8080:8080"  # API port
-      - "5173:5173"  # React ui port
+      - "5173:5173"  # React UI port
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data

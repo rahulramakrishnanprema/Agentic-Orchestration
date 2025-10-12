@@ -20,9 +20,9 @@ created_project_files/
 .idea/
 
 # React/Node
-ui/node_modules/
-ui/build/
-ui/dist/
+UI/node_modules/
+UI/build/
+UI/dist/
 
 # Test coverage
 .coverage

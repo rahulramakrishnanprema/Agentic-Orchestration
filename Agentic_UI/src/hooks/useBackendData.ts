@@ -91,7 +91,7 @@ export const useBackendData = () => {
       setIsSystemRunning(status.system_running);
       setWorkflowStage(status.current_stage);
       setError(null);
-      // Convert backend agents to ui format
+      // Convert backend agents to UI format
       const backendAgents: Agent[] = [
         {
           id: '1',

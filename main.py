@@ -2,7 +2,7 @@ import logging
 import webbrowser
 import time
 from core.router import initialize_system, run_system, shutdown_system
-from ui.ui import start_ui_server, stop_ui_server, config
+from UI.ui import start_ui_server, stop_ui_server, config
 
 # Configure logging
 logging.basicConfig(
@@ -37,9 +37,9 @@ def main():
             logger.warning(f"Could not open browser automatically: {browser_error}")
             logger.info(f"Please manually navigate to: {ui_url}")
 
-        # Step 3: System is ready and waiting for ui trigger
-        # DO NOT auto-start the workflow - wait for ui button click
-        logger.info("System ready - waiting for ui trigger to start automation")
+        # Step 3: System is ready and waiting for UI trigger
+        # DO NOT auto-start the workflow - wait for UI button click
+        logger.info("System ready - waiting for UI trigger to start automation")
         run_system()
         return True
 

@@ -39,7 +39,7 @@ class Config:
     REVIEWER_LLM_URL = os.getenv("REVIEWER_LLM_URL", LLM_API_URL)
     REVIEWER_LLM_MODEL = os.getenv("REVIEWER_LLM_MODEL")
 
-    # Agentic ui Configuration
+    # Agentic UI Configuration
     UI_HOST = os.getenv("UI_HOST")
     UI_PORT = int(os.getenv("UI_PORT"))
     REACT_DEV_PORT = int(os.getenv("REACT_DEV_PORT"))
@@ -62,8 +62,8 @@ class Config:
     MONGODB_DATABASE = os.getenv("MONGODB_DATABASE")
     PLANNER_FEEDBACK = os.getenv("PLANNER_FEEDBACK", )
     MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION")
-    MONGODB_URI = os.getenv("MONGODB_CONNECTION_STRING")  # Alias for ui compatibility
-    MONGODB_DB = os.getenv("MONGODB_DATABASE")  # Alias for ui compatibility
+    MONGODB_URI = os.getenv("MONGODB_CONNECTION_STRING")  # Alias for UI compatibility
+    MONGODB_DB = os.getenv("MONGODB_DATABASE")  # Alias for UI compatibility
     MONGODB_ENABLED = os.getenv("MONGODB_ENABLED", "True").lower() == "true"
     DEVELOPER_AGENT_FEEDBACK = os.getenv("DEVELOPER_AGENT_FEEDBACK")
     ASSEMBLER_FEEDBACK = os.getenv("ASSEMBLER_FEEDBACK")
