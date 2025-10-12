@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"  # API port
+      - "5173:5173"  # React UI port
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./created_project_files:/app/created_project_files
+    environment:
+      - UI_HOST=0.0.0.0
+      - UI_PORT=8080
+      - REACT_DEV_PORT=5173
+      - DEBUG=False
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    networks:
+      - agent-flow-network
+
+  mongodb:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=code_review
+    restart: unless-stopped
+    networks:
+      - agent-flow-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  agent-flow-network:
+    driver: bridge

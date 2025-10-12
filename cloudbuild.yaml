@@ -1,0 +1,63 @@
+# Cloud Build configuration for GCP
+# Builds and deploys the application to Cloud Run
+
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/agent-flow:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/agent-flow:latest'
+      - '.'
+    timeout: 600s
+
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/agent-flow:$SHORT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/agent-flow:latest'
+
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'agent-flow'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/agent-flow:$SHORT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '3600'
+      - '--port'
+      - '8080'
+      - '--set-env-vars'
+      - 'UI_HOST=0.0.0.0,UI_PORT=8080,REACT_DEV_PORT=5173,MAX_REBUILD_ATTEMPTS=3,REVIEW_THRESHOLD=70,GOT_SCORE_THRESHOLD=7.0,HITL_TIMEOUT_SECONDS=30'
+      - '--set-secrets'
+      - 'OPENROUTE_API_KEY=OPENROUTE_API_KEY:latest,GITHUB_TOKEN=GITHUB_TOKEN:latest,JIRA_TOKEN=JIRA_TOKEN:latest,JIRA_SERVER=JIRA_SERVER:latest,JIRA_EMAIL=JIRA_EMAIL:latest,PROJECT_KEY=PROJECT_KEY:latest,MONGODB_CONNECTION_STRING=MONGODB_CONNECTION_STRING:latest,SONAR_TOKEN=SONAR_TOKEN:latest,LLM_MODEL=LLM_MODEL:latest,GOT_LLM_MODEL=GOT_LLM_MODEL:latest,GITHUB_REPO_OWNER=GITHUB_REPO_OWNER:latest,GITHUB_REPO_NAME=GITHUB_REPO_NAME:latest,SONAR_ORG=SONAR_ORG:latest,SONAR_PROJECT_KEY=SONAR_PROJECT_KEY:latest'
+
+images:
+  - 'gcr.io/$PROJECT_ID/agent-flow:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/agent-flow:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s
+

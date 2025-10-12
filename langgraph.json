@@ -1,0 +1,10 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "ai_development_system": "./router.py:app_graph"
+  },
+  "env": ".env",
+  "paths": {
+    "router": "./router.py"
+  }
+}

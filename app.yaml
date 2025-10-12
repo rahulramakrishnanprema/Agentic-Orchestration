@@ -1,0 +1,30 @@
+# App Engine configuration for GCP deployment
+runtime: python311
+entrypoint: python main.py
+
+instance_class: F4_1G
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.70
+  target_throughput_utilization: 0.70
+
+env_variables:
+  UI_HOST: "0.0.0.0"
+  UI_PORT: "8080"
+  REACT_DEV_PORT: "5173"
+  PYTHONUNBUFFERED: "1"
+  MAX_REBUILD_ATTEMPTS: "3"
+  REVIEW_THRESHOLD: "70"
+  GOT_SCORE_THRESHOLD: "7.0"
+  HITL_TIMEOUT_SECONDS: "30"
+  REVIEW_BRANCH_NAME: "review_files"
+  OPENROUTE_API_URL: "https://openrouter.ai/api/v1/chat/completions"
+  SONAR_HOST_URL: "https://sonarcloud.io"
+  LOG_LEVEL: "INFO"
+  DEBUG: "False"
+
+# Note: Sensitive values should be stored in Secret Manager
+# and accessed via code, not defined here
+

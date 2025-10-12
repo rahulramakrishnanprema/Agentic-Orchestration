@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+*.so
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+
+# Data
+data/
+created_project_files/
+# IDE
+.vscode/
+.idea/
+
+# React/Node
+UI/node_modules/
+UI/build/
+UI/dist/
+
+# Test coverage
+.coverage
+htmlcov/
+
+# MongoDB
+mongodb_data/
