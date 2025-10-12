@@ -2,7 +2,7 @@
 from typing import Dict, Any, List, Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
 from tools.planner_tools import generate_got_subtasks, score_subtasks_with_llm, merge_subtasks, perform_hitl_validation
-from UI.ui import workflow_status, workflow_status_lock
+from ui.ui import workflow_status, workflow_status_lock
 import logging
 import os
 from dotenv import load_dotenv
