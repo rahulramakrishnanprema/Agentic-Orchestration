@@ -22,7 +22,7 @@ spec:
         - containerPort: 8080
           name: http
         - containerPort: 5173
-          name: ui
+          name: UI
         env:
         # Config from ConfigMap
         - name: UI_HOST
@@ -195,7 +195,7 @@ spec:
   - port: 5173
     targetPort: 5173
     protocol: TCP
-    name: ui
+    name: UI
   selector:
     app: agent-flow
 ---

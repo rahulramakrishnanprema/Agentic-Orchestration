@@ -2,7 +2,7 @@ import logging
 import webbrowser
 import time
 from core.router import initialize_system, run_system, shutdown_system
-from ui.ui import start_ui_server, stop_ui_server, config
+from UI.ui import start_ui_server, stop_ui_server, config
 
 # Configure logging
 logging.basicConfig(
