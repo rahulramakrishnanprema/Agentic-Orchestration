@@ -196,21 +196,34 @@ class LLMService:
         max_tokens: Optional[int],
         temperature: float
     ) -> Tuple[str, int]:
-        """Universal provider call - automatically detects request format from URL"""
+        """Universal provider call - uses the exact URL provided by user, auto-detects API format from response"""
         session = await self._get_session()
 
-        # Build the API URL - replace {model} placeholder if present
+        # Build the API URL - replace {model} placeholder if present (for Gemini)
         api_url = self.api_url.replace("{model}", model)
 
         # Prepare headers
         headers = {"Content-Type": "application/json"}
 
-        # Detect format based on URL pattern
+        # Detect provider format ONLY from URL for specific header requirements
+        # Gemini uses API key in URL, others use Authorization header
         if "generativelanguage.googleapis.com" in self.api_url.lower():
-            # Gemini format - API key in URL query parameter
+            # Gemini-specific: API key in URL query parameter
             api_url += f"&key={self.api_key}" if "?" in api_url else f"?key={self.api_key}"
+        else:
+            # All other providers: Authorization header (OpenAI, Groq, OpenRouter, Local LLMs, etc.)
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
-            # Gemini request format
+        # Add optional headers for specific providers (doesn't affect functionality)
+        if "openrouter.ai" in self.api_url.lower():
+            headers["HTTP-Referer"] = "https://github.com/agent-flow"
+            headers["X-Title"] = "Agent Flow"
+        elif "groq.com" in self.api_url.lower():
+            headers["HTTP-Referer"] = "https://github.com/agent-flow"
+
+        # Prepare request data based on API format (Gemini vs OpenAI-compatible)
+        if "generativelanguage.googleapis.com" in self.api_url.lower():
+            # Gemini API format
             generation_config = {"temperature": temperature}
             if max_tokens is not None:
                 generation_config["maxOutputTokens"] = max_tokens
@@ -224,80 +237,39 @@ class LLMService:
             extract_content = lambda r: r['candidates'][0]['content']['parts'][0]['text']
             extract_tokens = lambda r: r.get('usageMetadata', {}).get('totalTokenCount', 0)
         else:
-            # OpenAI-compatible format (OpenAI, Groq, OpenRouter, etc.)
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-            # OpenRouter specific headers
-            if "openrouter.ai" in self.api_url.lower():
-                headers["HTTP-Referer"] = "https://github.com/agent-flow"
-                headers["X-Title"] = "Agent Flow"
-
-            # Groq specific headers (optional but recommended)
-            if "groq.com" in self.api_url.lower():
-                headers["HTTP-Referer"] = "https://github.com/agent-flow"
-                # Groq uses OpenAI-compatible format, no special handling needed
-
-            # Detect if reasoning model (o1, o1-mini, o1-preview) for OpenAI-specific adjustments
+            # OpenAI-compatible format (OpenAI, Groq, OpenRouter, Local LLMs, etc.)
+            # Detect model type for parameter handling
             model_lower = model.lower()
 
-            # Reasoning models detection - these use different API parameters
-            # Note: o1-mini and o3-mini are reasoning models, NOT standard chat models
-            # Groq models are always standard chat models
-            is_groq = "groq.com" in self.api_url.lower()
-            is_reasoning_model = False if is_groq else any(keyword in model_lower for keyword in [
-                "o1-preview", "o1-mini", "o1",  # Order matters - check longer strings first
+            # Check if it's a reasoning model (o1 series) - these have special requirements
+            is_reasoning_model = any(keyword in model_lower for keyword in [
+                "o1-preview", "o1-mini", "o1",
                 "o3-preview", "o3-mini", "o3"
             ])
 
-            # GPT-5 detection - ALL gpt-5 variants have temperature restrictions
-            # Check for gpt-5, gpt-5-mini, gpt-5-turbo, gpt-5o, etc.
+            # Check if it's a GPT-5 model - these have temperature restrictions
             is_gpt5_model = "gpt-5" in model_lower
 
-            # Explicitly check if it's a standard chat model (NOT gpt-5 or reasoning)
-            # This ensures gpt-4-mini, gpt-4o-mini are treated as standard chat models
-            is_standard_chat_model = not is_gpt5_model and any(pattern in model_lower for pattern in [
-                "gpt-3.5", "gpt-4-mini", "gpt-4o-mini", "gpt-4-turbo", "gpt-4o", "gpt-4",
-                # Groq models
-                "llama", "mixtral", "gemma", "whisper"
-            ])
-
-            # If it's explicitly a standard chat model or Groq, override reasoning detection
-            if is_standard_chat_model or is_groq:
-                is_reasoning_model = False
-
             if is_reasoning_model:
-                # Reasoning models (o1/o3 series) use different API structure
-                # They don't support temperature parameter at all
-                # They use simplified request format
+                # Reasoning models: Use max_completion_tokens, no temperature
+                logger.info(f"Detected reasoning model: {model}. Using max_completion_tokens, no temperature.")
                 data = {
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}]
                 }
-
-                # Reasoning models use max_completion_tokens instead of max_tokens
                 if max_tokens is not None:
                     data["max_completion_tokens"] = max_tokens
-
-                # Note: o1 models don't support temperature, top_p, or reasoning_effort
-                # They use their own internal reasoning process
-
-                extract_content = lambda r: r['choices'][0]['message']['content']
             elif is_gpt5_model:
-                # ALL GPT-5 models (gpt-5, gpt-5-mini, gpt-5-turbo, gpt-5o) have parameter restrictions
-                # They ONLY support default temperature (1.0), no custom values allowed
-                logger.info(f"Using GPT-5 variant: {model}. Omitting temperature parameter (only default supported).")
+                # GPT-5 models: No temperature parameter (only default supported)
+                logger.info(f"Detected GPT-5 variant: {model}. Omitting temperature parameter.")
                 data = {
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}]
                 }
-                # GPT-5 only accepts default temperature, so we MUST omit it entirely
-                # Adding any temperature value (even 1.0) may cause 400 error
-
                 if max_tokens is not None:
                     data["max_tokens"] = max_tokens
-                extract_content = lambda r: r['choices'][0]['message']['content']
             else:
-                # Standard chat models (GPT-4, GPT-4o, GPT-4-turbo, GPT-3.5, all mini variants, etc.)
+                # Standard models: Full parameter support (GPT-4, Groq models, local LLMs, etc.)
                 data = {
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
@@ -305,10 +277,11 @@ class LLMService:
                 }
                 if max_tokens is not None:
                     data["max_tokens"] = max_tokens
-                extract_content = lambda r: r['choices'][0]['message']['content']
-        extract_tokens = lambda r: r.get('usage', {}).get('total_tokens', 0)
 
-        # Make the API call
+            extract_content = lambda r: r['choices'][0]['message']['content']
+            extract_tokens = lambda r: r.get('usage', {}).get('total_tokens', 0)
+
+        # Make the API call to the URL provided in .env
         async with session.post(api_url, headers=headers, json=data) as response:
             response_text = await response.text()
 
@@ -322,10 +295,10 @@ class LLMService:
             try:
                 response_data = await response.json()
             except Exception as json_error:
-                # Local LLMs (like LM Studio) may return malformed JSON
-                logger.warning(f"JSON parsing failed: {json_error}. Attempting to fix malformed JSON from local LLM...")
+                # Local LLMs or custom APIs may return malformed JSON
+                logger.warning(f"JSON parsing failed: {json_error}. Attempting to fix malformed JSON...")
 
-                # Try to fix common JSON issues from local LLMs
+                # Try to fix common JSON issues
                 try:
                     import re
                     import json
@@ -344,13 +317,13 @@ class LLMService:
 
                     # Try parsing again
                     response_data = json.loads(cleaned_text)
-                    logger.info("Successfully parsed malformed JSON from local LLM")
+                    logger.info("Successfully parsed malformed JSON")
 
                 except Exception as retry_error:
                     # If still fails, create a compatible response structure
                     logger.warning(f"Could not parse response as JSON: {retry_error}. Using raw text as content.")
 
-                    # Detect provider format and create appropriate response
+                    # Create appropriate response structure based on API format
                     if "generativelanguage.googleapis.com" in self.api_url.lower():
                         # Gemini format
                         response_data = {
@@ -362,7 +335,7 @@ class LLMService:
                             'usageMetadata': {'totalTokenCount': 0}
                         }
                     else:
-                        # OpenAI-compatible format (covers local LLMs, OpenAI, Groq, etc.)
+                        # OpenAI-compatible format (default for most APIs)
                         response_data = {
                             'choices': [{
                                 'message': {
@@ -371,7 +344,7 @@ class LLMService:
                             }],
                             'usage': {'total_tokens': 0}
                         }
-                    logger.info("Created fallback response structure for local LLM")
+                    logger.info("Created fallback response structure")
 
         # Extract content and tokens
         try:
