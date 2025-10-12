@@ -414,7 +414,7 @@ def get_system_env_vars() -> Dict[str, str]:
 
 
 def handle_ui_automation_request(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle Agentic_UI automation request - start automation from UI"""
+    """Handle Agentic_UI automation request - start automation from ui"""
     # Start automation instead of just processing one trigger
     return start_automation()
 
@@ -461,7 +461,7 @@ def reset_system_stats() -> Dict[str, Any]:
 
 
 def start_automation() -> Dict[str, Any]:
-    """Start the automation process from UI"""
+    """Start the automation process from ui"""
     global automation_running, automation_thread
 
     with automation_lock:
@@ -472,7 +472,7 @@ def start_automation() -> Dict[str, Any]:
             return {"success": False, "message": "Router not initialized"}
 
         automation_running = True
-        log_activity("Automation started from UI")
+        log_activity("Automation started from ui")
 
         # Start automation in a separate thread
         automation_thread = threading.Thread(target=_automation_worker, daemon=True, name="AutomationWorker")
@@ -482,7 +482,7 @@ def start_automation() -> Dict[str, Any]:
 
 
 def stop_automation() -> Dict[str, Any]:
-    """Stop the automation process from UI"""
+    """Stop the automation process from ui"""
     global automation_running, automation_thread
 
     with automation_lock:
@@ -490,7 +490,7 @@ def stop_automation() -> Dict[str, Any]:
             return {"success": False, "message": "Automation is not running"}
 
         automation_running = False
-        log_activity("Automation stopped from UI")
+        log_activity("Automation stopped from ui")
 
         # Wait for thread to finish (with timeout)
         if automation_thread and automation_thread.is_alive():
@@ -510,7 +510,7 @@ def _automation_worker():
     try:
         # Process trigger when automation starts
         if router_instance and automation_running:
-            result = router_instance.process_trigger("UI triggered automation start")
+            result = router_instance.process_trigger("ui triggered automation start")
             log_activity(f"Automation trigger result: {result.get('success', False)}")
 
         # Keep running and process any queued tasks
@@ -531,10 +531,10 @@ def get_automation_status() -> bool:
 
 
 def run_system() -> None:
-    """Run the main system loop - wait for UI trigger"""
-    log_activity("LangGraph router system ready - waiting for UI trigger")
+    """Run the main system loop - wait for ui trigger"""
+    log_activity("LangGraph router system ready - waiting for ui trigger")
 
-    # Keep system running and wait for automation commands from UI
+    # Keep system running and wait for automation commands from ui
     while server_running:
         time.sleep(1)
 

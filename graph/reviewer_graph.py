@@ -6,7 +6,7 @@ from tools.reviewer_tool import (
     analyze_code_security, analyze_coding_standards, calculate_review_scores,
     store_review_in_mongodb, analyze_python_code_with_pylint
 )
-from UI.ui import workflow_status, workflow_status_lock
+from ui.ui import workflow_status, workflow_status_lock
 import logging
 from threading import Lock
 

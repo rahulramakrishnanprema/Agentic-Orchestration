@@ -9,7 +9,7 @@ A Agentic_UI server and connection interface for the AI development system featu
 
 This module handles all Agentic_UI connections and HTTP server operations, while delegating core system functionality to router.py.
 """
-# UI.py
+# ui.py
 import os
 import json
 import logging
