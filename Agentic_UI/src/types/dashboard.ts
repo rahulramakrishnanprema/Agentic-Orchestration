@@ -25,7 +25,7 @@ export interface ActivityLog {
   agent: string;
   action: string;
   details: string;
-  status: 'info' | 'success' | 'warning' | 'error';
+  status: 'info' | 'success' | 'warning' | 'error' | 'starting';
   issueId?: string;
   subtasks?: Array<{
     id: number;
@@ -34,8 +34,21 @@ export interface ActivityLog {
     priority?: number;
     reasoning?: string;
   }>;
+  documentSections?: Array<{
+    title: string;
+    content: string;
+  }>;
+  deploymentDocument?: string;  // NEW: Full deployment document markdown content
   totalScore?: number;
   averageScore?: number;
+  pylintScore?: number;  // NEW: Pylint score (0-10 scale)
+  reviewScores?: {  // NEW: Detailed review scores
+    overall?: number;
+    completeness?: number;
+    security?: number;
+    standards?: number;
+    pylint?: number;
+  };
 }
 export interface Metrics {
   totalPullRequests: number;
@@ -46,6 +59,7 @@ export interface Metrics {
   tasksPending: number;
   tasksMovedToHITL: number;
   averageSonarQubeScore: number;
+  averageReviewScore: number;  // NEW: Add reviewer score
   successRate: number;
   taskagent_generations: number;
   developer_generations: number;

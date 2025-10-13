@@ -54,6 +54,15 @@ interface BackendActivity {
     details: string;
     status: 'info' | 'success' | 'warning' | 'error';
     issueId?: string;
+    subtasks?: Array<{
+      id: number;
+      description: string;
+      score: number;
+      priority?: number;
+      reasoning?: string;
+    }>;
+    totalScore?: number;
+    averageScore?: number;
   }>;
 }
 
@@ -72,11 +81,16 @@ export const useBackendData = () => {
     tasksPending: 0,
     tasksMovedToHITL: 0,
     averageSonarQubeScore: 0,
+    averageReviewScore: 0,  // NEW: Add reviewer score
     successRate: 0,
     taskagent_generations: 0,
     developer_generations: 0,
     reviewer_generations: 0,
-    rebuilder_generations: 0
+    rebuilder_generations: 0,
+    planner_tokens: 0,
+    developer_tokens: 0,
+    reviewer_tokens: 0,
+    rebuilder_tokens: 0
   });
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [isSystemRunning, setIsSystemRunning] = useState(false);
@@ -150,11 +164,16 @@ export const useBackendData = () => {
         tasksPending: stats.tasksPending,
         tasksMovedToHITL: stats.tasksMovedToHITL,
         averageSonarQubeScore: stats.averageSonarQubeScore,
+        averageReviewScore: (stats as any).averageReviewScore || 0,  // NEW: Map reviewer score
         successRate: stats.successRate,
         taskagent_generations: stats.taskagent_generations,
         developer_generations: stats.developer_generations,
         reviewer_generations: stats.reviewer_generations,
-        rebuilder_generations: stats.rebuilder_generations
+        rebuilder_generations: stats.rebuilder_generations,
+        planner_tokens: (stats as any).planner_tokens || 0,
+        developer_tokens: (stats as any).developer_tokens || 0,
+        reviewer_tokens: (stats as any).reviewer_tokens || 0,
+        rebuilder_tokens: (stats as any).rebuilder_tokens || 0
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch stats');
@@ -165,10 +184,10 @@ export const useBackendData = () => {
   const fetchCurrentAgentPerformance = useCallback(async () => {
     try {
       const currentAgentData = await api.getCurrentAgents();
-      setCurrentAgents(currentAgentData.map(agent => ({
+      setCurrentAgents(currentAgentData.map((agent: any) => ({
         id: agent.agent,  // Use agent name as id
         name: agent.agent,
-        status: 'active',  // Assume active for current
+        status: 'active' as const,  // Assume active for current
         lastActivity: new Date(),
         tasksProcessed: agent.tasks_processed,  // Real data
         llmModel: agent.model_used,
@@ -185,7 +204,7 @@ export const useBackendData = () => {
     try {
       const agentData = await api.getAgentPerformance();
       setAgents(prevAgents => prevAgents.map(agent => {
-        const perf = agentData.find(p => p.agent === agent.name) || {};
+        const perf = agentData.find((p: any) => p.agent === agent.name) || {};
         return {
           ...agent,
           tasksProcessed: perf.tasks_processed || 0,
@@ -210,7 +229,11 @@ export const useBackendData = () => {
         action: activity.action,
         details: activity.details,
         status: activity.status,
-        issueId: activity.issueId
+        issueId: activity.issueId,
+        // FIXED: Include subtasks, totalScore, and averageScore from backend
+        subtasks: activity.subtasks,
+        totalScore: activity.totalScore,
+        averageScore: activity.averageScore
       }));
       setActivityLogs(formattedLogs);
     } catch (err) {

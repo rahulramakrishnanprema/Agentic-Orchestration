@@ -105,7 +105,7 @@ class AssemblerAgent:
             thread_id: Thread identifier
 
         Returns:
-            Dict with deployment_document and metadata
+            Dict with deployment_document, markdown, and metadata
         """
         if not thread_id:
             thread_id = f"ASSEMBLER-{os.getpid()}"
@@ -118,6 +118,7 @@ class AssemblerAgent:
                 approved_subtasks=approved_subtasks,
                 thread_id=thread_id,
                 deployment_document=None,
+                markdown=None,  # Add markdown to initial state
                 error="",
                 tokens_used=0
             )
@@ -138,6 +139,7 @@ class AssemblerAgent:
             return {
                 "success": True,
                 "deployment_document": deployment_doc,
+                "markdown": final_state.get("markdown", ""),  # Include markdown in return
                 "tokens_used": final_state.get("tokens_used", 0)
             }
 

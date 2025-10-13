@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Clock, Info, CheckCircle, AlertTriangle, XCircle, ChevronDown, ChevronUp, ListChecks, Trophy } from 'lucide-react';
+import React from 'react';
+import { Clock, Info, CheckCircle, AlertTriangle, XCircle, Trophy, Target, FileText } from 'lucide-react';
 import { ActivityLog as ActivityLogType } from '../types/dashboard';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,14 +9,25 @@ interface ActivityLogProps {
 }
 
 export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  // Safety check for logs
+  if (!logs || !Array.isArray(logs)) {
+    return (
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="w-5 h-5 text-slate-700" />
+          <h3 className="text-lg font-semibold text-slate-900">Activity Log</h3>
+        </div>
+        <p className="text-sm text-slate-500">No activity logs available</p>
+      </div>
+    );
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'success': return <CheckCircle className="w-4 h-4 text-green-600" />;
       case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
       case 'error': return <XCircle className="w-4 h-4 text-red-600" />;
-              case 'starting': return <Clock className="w-4 h-4 text-amber-500" />;
+      case 'starting': return <Clock className="w-4 h-4 text-amber-500" />;
       default: return <Info className="w-4 h-4 text-blue-600" />;
     }
   };
@@ -31,151 +42,276 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
     }
   };
 
-  const toggleExpand = (logId: string) => {
-    setExpandedLogId(expandedLogId === logId ? null : logId);
-  };
-
   const getScoreColor = (score: number) => {
     if (score >= 8) return 'text-green-600 bg-green-100';
     if (score >= 6) return 'text-yellow-600 bg-yellow-100';
     return 'text-red-600 bg-red-100';
   };
 
+  const getTotalScoreColor = (score: number) => {
+    if (score >= 40) return 'text-green-600 bg-green-100 border-green-300';
+    if (score >= 30) return 'text-yellow-600 bg-yellow-100 border-yellow-300';
+    return 'text-orange-600 bg-orange-100 border-orange-300';
+  };
+
+  const getPylintScoreColor = (score: number) => {
+    // Pylint score is 0-10 scale
+    if (score >= 8) return 'text-green-600 bg-green-100 border-green-300';
+    if (score >= 6) return 'text-yellow-600 bg-yellow-100 border-yellow-300';
+    if (score >= 4) return 'text-orange-600 bg-orange-100 border-orange-300';
+    return 'text-red-600 bg-red-100 border-red-300';
+  };
+
+  const getReviewScoreColor = (score: number) => {
+    // Review score is 0-100 scale
+    if (score >= 80) return 'text-green-600 bg-green-100 border-green-300';
+    if (score >= 60) return 'text-yellow-600 bg-yellow-100 border-yellow-300';
+    if (score >= 40) return 'text-orange-600 bg-orange-100 border-orange-300';
+    return 'text-red-600 bg-red-100 border-red-300';
+  };
+
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 h-[500px] flex flex-col">
       <div className="flex items-center gap-2 mb-4">
         <Clock className="w-5 h-5 text-slate-700" />
         <h3 className="text-lg font-semibold text-slate-900">Activity Log</h3>
       </div>
 
-      <div className="space-y-3 max-h-96 overflow-y-auto">
-        <AnimatePresence>
-          {logs.map((log) => {
-            const hasSubtasks = log.subtasks && log.subtasks.length > 0;
-            const isExpanded = expandedLogId === log.id;
+      <div className="space-y-3 flex-1 overflow-y-auto">
+        {logs.length === 0 ? (
+          <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
+        ) : (
+          <AnimatePresence>
+            {logs.map((log) => {
+              // Safety checks for log object
+              if (!log || !log.id) return null;
 
-            return (
-              <motion.div
-                key={log.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-                className={`border-l-4 p-3 rounded-r-lg ${getStatusColor(log.status)}`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      {getStatusIcon(log.status)}
-                      <span className="font-medium text-slate-900">{log.agent}</span>
-                      <span className="text-slate-600">•</span>
-                      <span className="font-medium text-slate-900">{log.action}</span>
-                    </div>
-                    <p className="text-sm text-slate-700 mb-1">{log.details}</p>
+              const hasSubtasks = Array.isArray(log.subtasks) && log.subtasks.length > 0;
+              const hasDocumentSections = Array.isArray(log.documentSections) && log.documentSections.length > 0;
+              const hasDeploymentDocument = typeof log.deploymentDocument === 'string' && log.deploymentDocument.length > 0;
 
-                    {/* Display total score and average score if available */}
-                    {(log.totalScore !== undefined || log.averageScore !== undefined) && (
-                      <div className="flex items-center gap-3 mt-2 mb-2">
-                        {log.totalScore !== undefined && (
-                          <div className="flex items-center gap-1">
-                            <Trophy className="w-4 h-4 text-amber-600" />
-                            <span className="text-xs font-semibold text-slate-700">
-                              Total Score: <span className="text-amber-600">{log.totalScore}</span>
+              return (
+                <motion.div
+                  key={log.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3 }}
+                  className={`border-l-4 p-3 rounded-r-lg ${getStatusColor(log.status || 'info')}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {getStatusIcon(log.status || 'info')}
+                        <span className="font-medium text-slate-900">{log.agent || 'Unknown'}</span>
+                        <span className="text-slate-600">•</span>
+                        <span className="font-medium text-slate-900">{log.action || 'Activity'}</span>
+                      </div>
+                      <p className="text-sm text-slate-700 mb-1">{log.details || ''}</p>
+
+                      {/* Display Overall Total Score prominently */}
+                      {log.totalScore !== undefined && log.totalScore !== null && (
+                        <div className="flex items-center gap-2 mt-2 mb-3">
+                          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 ${getTotalScoreColor(log.totalScore)}`}>
+                            <Trophy className="w-5 h-5" />
+                            <span className="text-sm font-bold">
+                              Overall Score: {typeof log.totalScore === 'number' ? log.totalScore.toFixed(1) : log.totalScore}
                             </span>
                           </div>
-                        )}
-                        {log.averageScore !== undefined && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-semibold text-slate-700">
-                              Avg: <span className={`px-2 py-0.5 rounded ${getScoreColor(log.averageScore)}`}>
-                                {log.averageScore.toFixed(1)}
+                        </div>
+                      )}
+
+                      {/* Display Review Scores (Reviewer Agent) */}
+                      {log.reviewScores && (
+                        <div className="flex flex-wrap items-center gap-2 mt-2 mb-3">
+                          {log.reviewScores.overall !== undefined && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${getReviewScoreColor(log.reviewScores.overall)}`}>
+                              <Trophy className="w-4 h-4" />
+                              <span className="text-xs font-bold">
+                                Overall: {log.reviewScores.overall.toFixed(1)}%
                               </span>
+                            </div>
+                          )}
+                          {log.reviewScores.completeness !== undefined && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${getReviewScoreColor(log.reviewScores.completeness)}`}>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span className="text-xs font-semibold">
+                                Completeness: {log.reviewScores.completeness.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                          {log.reviewScores.security !== undefined && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${getReviewScoreColor(log.reviewScores.security)}`}>
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              <span className="text-xs font-semibold">
+                                Security: {log.reviewScores.security.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                          {log.reviewScores.standards !== undefined && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${getReviewScoreColor(log.reviewScores.standards)}`}>
+                              <Target className="w-3.5 h-3.5" />
+                              <span className="text-xs font-semibold">
+                                Standards: {log.reviewScores.standards.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                          {log.reviewScores.pylint !== undefined && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${getPylintScoreColor(log.reviewScores.pylint)}`}>
+                              <FileText className="w-3.5 h-3.5" />
+                              <span className="text-xs font-semibold">
+                                Pylint: {log.reviewScores.pylint.toFixed(1)}/10
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Display standalone Pylint Score if available */}
+                      {log.pylintScore !== undefined && log.pylintScore !== null && !log.reviewScores && (
+                        <div className="flex items-center gap-2 mt-2 mb-3">
+                          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 ${getPylintScoreColor(log.pylintScore)}`}>
+                            <FileText className="w-5 h-5" />
+                            <span className="text-sm font-bold">
+                              Pylint Score: {log.pylintScore.toFixed(1)}/10
                             </span>
                           </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-2">
+                        {log.issueId && (
+                          <span className="inline-block bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded font-medium">
+                            {log.issueId}
+                          </span>
+                        )}
+                        {hasSubtasks && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600">
+                            <Target className="w-3.5 h-3.5" />
+                            {log.subtasks!.length} Subtask{log.subtasks!.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {hasDocumentSections && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-purple-600">
+                            <FileText className="w-3.5 h-3.5" />
+                            {log.documentSections!.length} Section{log.documentSections!.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {hasDeploymentDocument && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                            <FileText className="w-3.5 h-3.5" />
+                            Deployment Document
+                          </span>
                         )}
                       </div>
-                    )}
 
-                    <div className="flex items-center gap-2 mt-2">
-                      {log.issueId && (
-                        <span className="inline-block bg-slate-200 text-slate-700 text-xs px-2 py-1 rounded">
-                          {log.issueId}
-                        </span>
+                      {/* Display Full Deployment Document (Markdown) - Priority over documentSections */}
+                      {hasDeploymentDocument && (
+                        <div className="mt-3 pt-3 border-t border-green-300">
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border-2 border-green-200 shadow-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="w-5 h-5 text-green-700" />
+                              <span className="text-sm font-bold text-green-800">Deployment Document</span>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-green-200 max-h-96 overflow-y-auto">
+                              <pre className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-mono">
+                                {log.deploymentDocument}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
                       )}
 
-                      {/* Show expandable button if subtasks exist */}
+                      {/* Always show subtasks inline - no expand/collapse */}
                       {hasSubtasks && (
-                        <button
-                          onClick={() => toggleExpand(log.id)}
-                          className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                        >
-                          <ListChecks className="w-3.5 h-3.5" />
-                          {log.subtasks!.length} Subtask{log.subtasks!.length !== 1 ? 's' : ''}
-                          {isExpanded ? (
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Expandable subtasks section */}
-                    <AnimatePresence>
-                      {hasSubtasks && isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="mt-3 pt-3 border-t border-slate-300"
-                        >
+                        <div className="mt-3 pt-3 border-t border-slate-300">
                           <div className="space-y-2">
-                            {log.subtasks!.map((subtask) => (
-                              <div
-                                key={subtask.id}
-                                className="bg-white rounded-lg p-2 border border-slate-200 shadow-sm"
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="text-xs font-bold text-slate-500">
-                                        #{subtask.id}
-                                      </span>
-                                      {subtask.priority !== undefined && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                                          P{subtask.priority}
+                            {log.subtasks!.map((subtask, index) => {
+                              // Safety check for subtask
+                              if (!subtask) return null;
+
+                              const subtaskId = subtask.id !== undefined ? subtask.id : index;
+                              const subtaskScore = typeof subtask.score === 'number' ? subtask.score : 0;
+
+                              return (
+                                <div
+                                  key={`${log.id}-subtask-${subtaskId}`}
+                                  className="bg-white rounded-lg p-2.5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-xs font-bold text-slate-500">
+                                          #{subtaskId}
                                         </span>
+                                        {subtask.priority !== undefined && (
+                                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">
+                                            P{subtask.priority}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                                        {subtask.description || 'No description'}
+                                      </p>
+                                      {subtask.reasoning && (
+                                        <p className="text-xs text-slate-500 italic mt-1">
+                                          {subtask.reasoning}
+                                        </p>
                                       )}
                                     </div>
-                                    <p className="text-xs text-slate-700 leading-relaxed">
-                                      {subtask.description}
-                                    </p>
-                                    {subtask.reasoning && (
-                                      <p className="text-xs text-slate-500 italic mt-1">
-                                        {subtask.reasoning}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className={`flex-shrink-0 px-2 py-1 rounded font-bold text-sm ${getScoreColor(subtask.score)}`}>
-                                    {subtask.score.toFixed(1)}
+                                    <div className={`flex-shrink-0 px-2 py-1 rounded font-bold text-sm ${getScoreColor(subtaskScore)}`}>
+                                      {subtaskScore.toFixed(1)}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
-                        </motion.div>
+                        </div>
                       )}
-                    </AnimatePresence>
+
+                      {/* Display document sections inline - no scores */}
+                      {hasDocumentSections && (
+                        <div className="mt-3 pt-3 border-t border-purple-300">
+                          <div className="space-y-2">
+                            {log.documentSections!.map((section, index) => {
+                              // Safety check for section
+                              if (!section) return null;
+
+                              return (
+                                <div
+                                  key={`${log.id}-section-${index}`}
+                                  className="bg-white rounded-lg p-2.5 border border-purple-200 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <FileText className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-sm font-bold text-purple-700">
+                                          {section.title || 'Untitled Section'}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                        {section.content || 'No content'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-500 ml-3 flex-shrink-0">
+                      {log.timestamp ? formatDistanceToNow(new Date(log.timestamp), { addSuffix: true }) : 'Just now'}
+                    </span>
                   </div>
-                  <span className="text-xs text-slate-500 ml-3 flex-shrink-0">
-                    {formatDistanceToNow(log.timestamp, { addSuffix: true })}
-                  </span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );

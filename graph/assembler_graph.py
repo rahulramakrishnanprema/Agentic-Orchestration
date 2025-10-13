@@ -18,6 +18,7 @@ class AssemblerState(TypedDict):
     approved_subtasks: List[Dict[str, Any]]
     thread_id: str
     deployment_document: Optional[Dict[str, Any]]
+    markdown: Optional[str]  # Add markdown field
     error: str
     tokens_used: int
 
@@ -44,6 +45,7 @@ def _generate_document_node(state: AssemblerState) -> Dict[str, Any]:
         if result.get("success"):
             return {
                 "deployment_document": result.get("document"),
+                "markdown": result.get("markdown", ""),  # Add markdown to state
                 "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
             }
         else:

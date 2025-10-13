@@ -96,6 +96,26 @@ def _score_subtasks_node(state: PlannerState) -> Dict[str, Any]:
                 overall = sum(s['score'] for s in scored_subtasks) / len(scored_subtasks)
             else:
                 overall = 0.0
+
+            # Calculate total score
+            total_score = sum(s['score'] for s in scored_subtasks) if scored_subtasks else 0
+
+            # NEW: Log subtasks BEFORE merging to UI
+            import core.router
+            from datetime import datetime
+            import uuid
+            core.router.safe_activity_log({
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "agent": "PlannerAgent",
+                "action": "Subtasks Scored (Before Merge)",
+                "details": f"Scored {len(scored_subtasks)} subtasks for {issue_data.get('key', 'UNKNOWN')} - Ready for review before merging",
+                "status": "info",
+                "issueId": issue_data.get('key'),
+                "subtasks": scored_subtasks,
+                "totalScore": round(total_score, 2),
+            })
+
             # Log overall score first
             logger.info(f"[PLANNER-{thread_id}] Overall subtask score: {overall:.1f}")
             # Then log all subtasks with scores

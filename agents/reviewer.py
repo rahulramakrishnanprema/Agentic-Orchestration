@@ -127,6 +127,7 @@ class SimplifiedReviewer:
                 security_result=None,
                 standards_result=None,
                 pylint_result=None,
+                per_file_results={},  # NEW: Added missing field
                 overall_score=0.0,
                 threshold=getattr(self.config, 'REVIEW_THRESHOLD', 70.0),
                 approved=False,
@@ -135,7 +136,8 @@ class SimplifiedReviewer:
                 mongodb_stored=False,
                 success=False,
                 error=None,
-                processing_time=0.0
+                processing_time=0.0,
+                review_queue=review_queue  # NEW: Pass review_queue to state
             )
 
             # Execute workflow

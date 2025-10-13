@@ -113,6 +113,11 @@ function App() {
   const ButtonIcon = buttonConfig.icon;
 
   const formatTokens = (tokens: number) => {
+    // Validate token value - if unrealistic, return 0
+    if (!tokens || tokens < 0 || tokens > 10000000) {
+      return '0';
+    }
+
     if (tokens >= 1000) {
       return `${(tokens / 1000).toFixed(1)}K`;
     }
@@ -210,7 +215,7 @@ function App() {
                   { title: "Pull Requests", value: metrics.totalPullRequests, changeType: "positive", icon: GitPullRequest, color: "bg-blue-600" },
                   { title: "PR Accepted", value: metrics.prAccepted, changeType: "positive", icon: GitMerge, color: "bg-green-600" },
                   { title: "Tokens Used", value: formatTokens(metrics.tokensUsed), changeType: "positive", icon: Zap, color: "bg-purple-600" },
-                  { title: "Code Quality Scores", value: `${metrics.averageSonarQubeScore}%`, changeType: "positive", icon: TrendingUp, color: "bg-blue-600" }
+                  { title: "Code Quality Scores", value: `${metrics.averageReviewScore}%`, changeType: "positive", icon: TrendingUp, color: "bg-blue-600" }
                 ].map((metric, index) => (
                   <motion.div
                     key={metric.title}
@@ -227,10 +232,14 @@ function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.2 }}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+              className="grid grid-cols-1 lg:grid-cols-12 gap-6"
             >
-              <WorkflowTracker currentIssue={currentIssue} workflowStage={workflowStage} />
-              <ActivityLog logs={activityLogs} />
+              <div className="lg:col-span-4">
+                <WorkflowTracker currentIssue={currentIssue} workflowStage={workflowStage} />
+              </div>
+              <div className="lg:col-span-8">
+                <ActivityLog logs={activityLogs || []} />
+              </div>
             </motion.div>
           </motion.div>
         );
@@ -434,4 +443,3 @@ function App() {
 }
 
 export default App;
-

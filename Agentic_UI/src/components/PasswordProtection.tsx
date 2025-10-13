@@ -1,7 +1,7 @@
 // File: src/components/PasswordProtection.tsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import logo from '../assets/Aristotlei-logo.png';
 
 interface PasswordProtectionProps {
@@ -44,22 +44,19 @@ export const PasswordProtection: React.FC<PasswordProtectionProps> = ({ onAuthen
             <motion.div
               animate={isShaking ? { x: [-10, 10, -10, 10, 0] } : {}}
               transition={{ duration: 0.5 }}
-              className="bg-blue-600 p-4 rounded-full mb-4"
+              className="mb-4 flex items-center justify-center"
             >
-              <Lock className="w-8 h-8 text-white" />
-            </motion.div>
-            <div className="flex items-center gap-3 mb-2">
               <img
                 src={logo}
                 alt="Aristotle AI Logo"
-                className="h-10 w-auto"
+                className="h-16 w-16 object-cover rounded-full"
               />
-              <h1 className="text-3xl font-bold text-slate-900">
-                Aristotle-I AI System
-              </h1>
-            </div>
-            <p className="text-slate-600 text-center">
-              Enter password to access the dashboard
+            </motion.div>
+            <h1 className="text-3xl font-bold text-slate-900">
+              Aristotle-I
+            </h1>
+            <p className="text-slate-600 text-center mt-2">
+              Agentic Orchestration Platform
             </p>
           </div>
 

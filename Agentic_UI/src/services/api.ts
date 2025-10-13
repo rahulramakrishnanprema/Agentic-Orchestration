@@ -76,11 +76,16 @@ export const api = {
         tasksPending: data.tasksPending || data.tasks_pending || 0,
         tasksMovedToHITL: data.tasksMovedToHITL || data.tasks_moved_to_hitl || 0,
         averageSonarQubeScore: data.averageSonarQubeScore || data.average_sonar_score || 0,
+        averageReviewScore: data.averageReviewScore || data.average_review_score || 0,  // NEW: Add reviewer score
         successRate: data.successRate || 0,
         taskagent_generations: data.taskagent_generations || 0,
         developer_generations: data.developer_generations || 0,
         reviewer_generations: data.reviewer_generations || 0,
         rebuilder_generations: data.rebuilder_generations || 0,
+        planner_tokens: data.planner_tokens || 0,
+        developer_tokens: data.developer_tokens || 0,
+        reviewer_tokens: data.reviewer_tokens || 0,
+        rebuilder_tokens: data.rebuilder_tokens || 0,
         last_updated: data.last_updated || new Date().toISOString(),
         system_status: data.system_status || 'unknown'
       };

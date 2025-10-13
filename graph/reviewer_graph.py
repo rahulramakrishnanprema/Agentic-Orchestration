@@ -46,7 +46,7 @@ class ReviewerState(TypedDict):
     threshold: float
     approved: bool
     all_issues: List[str]
-    tokens_used: Annotated[int, lambda x, y: x + y]  # NEW: Reducer for summing tokens
+    tokens_used: int  # FIXED: Removed reducer annotation - manual accumulation only
     mongodb_stored: bool
 
     # Metadata
@@ -144,8 +144,8 @@ def _node_pylint_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = tokens  # FIXED: Just assign, don't add (Annotated reducer handles it)
-            logger.info(f"[{state['thread_id']}] Pylint analysis: {result['pylint_score']:.1f}/10 score, {result['files_analyzed']} files")
+            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
+            logger.info(f"[{state['thread_id']}] Pylint analysis: {result['pylint_score']:.1f}/10 score, {result['files_analyzed']} files, tokens: {tokens}")
         else:
             logger.warning(f"[{state['thread_id']}] Pylint analysis failed: {result.get('error')}")
 
@@ -179,8 +179,8 @@ def _node_completeness_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = tokens  # FIXED: Just assign, don't add
-            logger.info(f"[{state['thread_id']}] Completeness analysis: {result['score']}% score")
+            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
+            logger.info(f"[{state['thread_id']}] Completeness analysis: {result['score']}% score, tokens: {tokens}")
         else:
             logger.warning(f"[{state['thread_id']}] Completeness analysis failed: {result.get('error')}")
 
@@ -213,8 +213,8 @@ def _node_security_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = tokens  # FIXED: Just assign, don't add
-            logger.info(f"[{state['thread_id']}] Security analysis: {result['score']}% score")
+            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
+            logger.info(f"[{state['thread_id']}] Security analysis: {result['score']}% score, tokens: {tokens}")
         else:
             logger.warning(f"[{state['thread_id']}] Security analysis failed: {result.get('error')}")
 
@@ -247,8 +247,8 @@ def _node_standards_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = tokens  # FIXED: Just assign, don't add
-            logger.info(f"[{state['thread_id']}] Standards analysis: {result['score']}% score")
+            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
+            logger.info(f"[{state['thread_id']}] Standards analysis: {result['score']}% score, tokens: {tokens}")
         else:
             logger.warning(f"[{state['thread_id']}] Standards analysis failed: {result.get('error')}")
 
@@ -375,6 +375,18 @@ def _node_finalize_review(state: ReviewerState) -> ReviewerState:
         if not state.get('error'):
             state['success'] = True
 
+            # ADDED: Log detailed token breakdown
+            pylint_tokens = state.get('pylint_result', {}).get('tokens_used', 0) if state.get('pylint_result') else 0
+            completeness_tokens = state.get('completeness_result', {}).get('tokens_used', 0) if state.get('completeness_result') else 0
+            security_tokens = state.get('security_result', {}).get('tokens_used', 0) if state.get('security_result') else 0
+            standards_tokens = state.get('standards_result', {}).get('tokens_used', 0) if state.get('standards_result') else 0
+
+            logger.info(f"[{state['thread_id']}] Token Usage Breakdown:")
+            logger.info(f"[{state['thread_id']}]   - Pylint: {pylint_tokens}")
+            logger.info(f"[{state['thread_id']}]   - Completeness: {completeness_tokens}")
+            logger.info(f"[{state['thread_id']}]   - Security: {security_tokens}")
+            logger.info(f"[{state['thread_id']}]   - Standards: {standards_tokens}")
+            logger.info(f"[{state['thread_id']}]   - Total: {state['tokens_used']}")
             logger.info(f"[{state['thread_id']}] Review finalized successfully: {state['overall_score']}%")
         else:
             state['success'] = False

@@ -32,19 +32,13 @@ prompt_loader = None
 
 FILE_EXTENSIONS = {
     "python": ".py", "py": ".py",
-    "java": ".java",
     "javascript": ".js", "js": ".js",
     "html": ".html",
     "css": ".css",
     "react": ".jsx",
     "sql": ".sql",
-    "json": ".json",
     "yaml": ".yml",
-    "yaml": ".yml",
-    "shell": ".sh",
-    "php": ".php",
-    "go": ".go",
-    "cpp": ".cpp"
+
 }
 
 def initialize_developer_tools(app_config, app_prompt_loader):
@@ -87,13 +81,33 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
         with stats_lock:
             tool_stats['code_generations'] += 1
         logging.info(f"[{thread_id}] Generating code files for {issue_key}")
+
+        # Validate deployment document structure
+        if not deployment_document:
+            logger.error(f"[{thread_id}] Deployment document is empty or None")
+            return {"success": False, "error": "Deployment document is empty", "tokens_used": 0}
+
         generated_files = {}
         total_tokens = 0
 
         # Extract from document
         file_structure = deployment_document.get("file_structure", {})
+
+        if not file_structure:
+            logger.error(f"[{thread_id}] file_structure is missing from deployment document")
+            logger.error(f"[{thread_id}] Document keys: {list(deployment_document.keys())}")
+            return {"success": False, "error": "file_structure missing from deployment document", "tokens_used": 0}
+
         file_types = file_structure.get("file_types", [])
         files = file_structure.get("files", [])
+
+        if not files:
+            logger.error(f"[{thread_id}] No files defined in file_structure")
+            logger.error(f"[{thread_id}] file_structure content: {json.dumps(file_structure, indent=2)}")
+            return {"success": False, "error": "No files defined in file_structure", "tokens_used": 0}
+
+        logger.info(f"[{thread_id}] Found {len(files)} files to generate: {[f.get('filename') for f in files]}")
+
         specs = deployment_document.get("technical_specifications", {})
         implementation_plan = deployment_document.get("implementation_plan", {})
 
@@ -102,6 +116,11 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
         def generate_single_file(file_info):  # NEW: Helper for parallel execution
             filename = file_info.get('filename', '')
             file_type = file_info.get('type', '')
+
+            if not filename:
+                logger.warning(f"[{thread_id}] Skipping file with no filename: {file_info}")
+                return None, None, 0
+
             extension = FILE_EXTENSIONS.get(file_type.lower(), ".txt")
 
             spec = specs.get(filename, {})
@@ -138,6 +157,8 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
                 if output_queue:  # NEW: Push to queue if provided
                     output_queue.put({"filename": filename, "content": generated_code})
                 return filename, generated_code, tokens
+            else:
+                logger.warning(f"[{thread_id}] Generated code for {filename} is empty")
             return None, None, tokens
 
         # NEW: Parallel execution
@@ -153,11 +174,16 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
             output_queue.put(None)
 
         if not generated_files:
-            return {"success": False, "error": "No files generated for specified types", "tokens_used": total_tokens}
+            logger.error(f"[{thread_id}] No files were successfully generated from {len(files)} attempted files")
+            logger.error(f"[{thread_id}] File list: {[f.get('filename', 'NO_NAME') for f in files]}")
+            return {"success": False, "error": f"No files generated - attempted {len(files)} files", "tokens_used": total_tokens}
+
+        logger.info(f"[{thread_id}] Successfully generated {len(generated_files)} files: {list(generated_files.keys())}")
         return {"success": True, "generated_files": generated_files, "tokens_used": total_tokens}
     except Exception as e:
         with stats_lock:
             tool_stats['errors'] += 1
+        logger.error(f"[{thread_id}] Code generation exception: {str(e)}", exc_info=True)
         return {"success": False, "error": str(e), "tokens_used": 0}
 
 @tool

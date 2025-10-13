@@ -86,24 +86,32 @@ processing_stats = {
     'successful_reviews': 0,
     'rebuild_cycles': 0,
     'tokens_used': 0,
-    'planner_tokens': 0,  # NEW
-    'assembler_tokens': 0,  # NEW
-    'developer_tokens': 0,  # NEW
-    'reviewer_tokens': 0,  # NEW
-    'rebuilder_tokens': 0,  # NEW
+    'planner_tokens': 0,
+    'assembler_tokens': 0,
+    'developer_tokens': 0,
+    'reviewer_tokens': 0,
+    'rebuilder_tokens': 0,
     'errors': 0,
     'taskagent_generations': 0,
-    'assembler_generations': 0,  # NEW: Added for Assembler Agent
+    'assembler_generations': 0,
     'developer_generations': 0,
     'reviewer_generations': 0,
     'rebuilder_generations': 0,
-    'tasks_completed': 0,
+    # Individual agent task completion counters
+    'planner_tasks_completed': 0,      # NEW: Planner task completions
+    'assembler_tasks_completed': 0,    # NEW: Assembler task completions
+    'developer_tasks_completed': 0,    # NEW: Developer task completions
+    'reviewer_tasks_completed': 0,     # NEW: Reviewer task completions
+    'tasks_completed': 0,               # Total tasks completed (sum of all agents)
     'tasks_failed': 0,
     'tasks_pending': 0,
     'tasks_moved_to_hitl': 0,
     'average_sonar_score': 0.0,
-    'total_sonar_scores': 0.0,  # NEW: Track total scores for averaging
-    'sonar_score_count': 0  # NEW: Track count for averaging
+    'total_sonar_scores': 0.0,
+    'sonar_score_count': 0,
+    'average_review_score': 0.0,  # NEW: Average reviewer agent score
+    'total_review_scores': 0.0,   # NEW: Total of all reviewer scores
+    'review_score_count': 0        # NEW: Count of reviews for averaging
 }
 
 # Global activity logs
@@ -118,7 +126,14 @@ def safe_stats_update(updates: Dict[str, Any]) -> None:
     with stats_lock:
         for key, value in updates.items():
             if key in processing_stats:
-                processing_stats[key] += value
+                # For token-related keys, use direct assignment for current session tracking
+                # For count-related keys, use addition
+                if key.endswith('_tokens'):
+                    # Token keys: accumulate within current session only
+                    processing_stats[key] += value
+                else:
+                    # Other stats: accumulate normally
+                    processing_stats[key] += value
 
 
 def safe_activity_log(entry: Dict[str, Any]) -> None:
@@ -181,16 +196,51 @@ class LangGraphRouter:
             return False
 
         try:
-            if self.config.GITHUB_TOKEN and self.config.GITHUB_REPO_OWNER and self.config.GITHUB_REPO_NAME:
-                github_client = Github(self.config.GITHUB_TOKEN)
-                user = github_client.get_user()
-                log_activity(f"GitHub client initialized for user: {user.login}")
-                return True
-            else:
-                log_activity("GitHub configuration incomplete")
+            if not self.config.GITHUB_TOKEN:
+                log_activity("GitHub token not configured - skipping GitHub integration")
                 return False
+
+            if not self.config.GITHUB_REPO_OWNER or not self.config.GITHUB_REPO_NAME:
+                log_activity("GitHub repository owner/name not configured")
+                return False
+
+            # Test token validity
+            log_activity(f"Testing GitHub token (starts with: {self.config.GITHUB_TOKEN[:10]}...)")
+            github_client = Github(self.config.GITHUB_TOKEN)
+
+            try:
+                user = github_client.get_user()
+                log_activity(f"✓ GitHub client initialized for user: {user.login}")
+
+                # Test repository access
+                repo = github_client.get_repo(f"{self.config.GITHUB_REPO_OWNER}/{self.config.GITHUB_REPO_NAME}")
+                log_activity(f"✓ Repository access confirmed: {repo.full_name}")
+
+                # Check token scopes and rate limit
+                try:
+                    rate_limit = github_client.get_rate_limit()
+                    # In PyGithub 2.7.0, rate_limit is a RateLimitOverview object
+                    # Access the core rate limit properly
+                    core_rate = rate_limit.core
+                    log_activity(f"✓ GitHub API rate limit: {core_rate.remaining}/{core_rate.limit}")
+                except AttributeError:
+                    # Fallback if rate limit structure is different
+                    log_activity("✓ GitHub API connected (rate limit check unavailable)")
+
+                return True
+            except GithubException as e:
+                if e.status == 401:
+                    log_activity("✗ GitHub authentication failed - Token is invalid or expired")
+                    log_activity("Please generate a new token at: https://github.com/settings/tokens")
+                    log_activity("Required scopes: repo, workflow")
+                elif e.status == 404:
+                    log_activity(f"✗ Repository not found or no access: {self.config.GITHUB_REPO_OWNER}/{self.config.GITHUB_REPO_NAME}")
+                else:
+                    log_activity(f"✗ GitHub error ({e.status}): {e.data.get('message', str(e))}")
+                return False
+
         except Exception as error:
-            log_activity(f"GitHub client initialization failed: {error}")
+            log_activity(f"✗ GitHub client initialization failed: {error}")
             return False
 
     def _initialize_sonarqube(self) -> bool:
@@ -378,21 +428,22 @@ def get_system_stats() -> Dict[str, Any]:
             "totalPullRequests": processing_stats['code_prs_created'],
             "prAccepted": processing_stats['successful_reviews'],
             "tokensUsed": processing_stats['tokens_used'],
-            "tasksCompleted": processing_stats['successful_reviews'],
+            "tasksCompleted": processing_stats['tasks_completed'],
             "tasksFailed": processing_stats['errors'],
-            "tasksPending": pending_tasks,  # NEW: Use dynamic pending_tasks
+            "tasksPending": pending_tasks,
             "tasksMovedToHITL": 0,  # TODO
             "averageSonarQubeScore": processing_stats['average_sonar_score'],
+            "averageReviewScore": processing_stats['average_review_score'],  # NEW: Return reviewer score
             "successRate": round(success_rate, 1),
             "taskagent_generations": processing_stats['issues_processed'],
             "developer_generations": processing_stats['issues_processed'],
             "reviewer_generations": processing_stats['successful_reviews'],
             "rebuilder_generations": processing_stats['rebuild_cycles'],
-            "planner_tokens": processing_stats['planner_tokens'],  # NEW
-            "assembler_tokens": processing_stats['assembler_tokens'],  # NEW
-            "developer_tokens": processing_stats['developer_tokens'],  # NEW
-            "reviewer_tokens": processing_stats['reviewer_tokens'],  # NEW
-            "rebuilder_tokens": processing_stats['rebuilder_tokens'],  # NEW
+            "planner_tokens": processing_stats['planner_tokens'],
+            "assembler_tokens": processing_stats['assembler_tokens'],
+            "developer_tokens": processing_stats['developer_tokens'],
+            "reviewer_tokens": processing_stats['reviewer_tokens'],
+            "rebuilder_tokens": processing_stats['rebuilder_tokens'],
             "last_updated": datetime.now().isoformat(),
             "system_status": "RUNNING" if automation_running else "STOPPED"
         }
@@ -445,13 +496,21 @@ def reset_system_stats() -> Dict[str, Any]:
             'developer_generations': 0,
             'reviewer_generations': 0,
             'rebuilder_generations': 0,
-            'tasks_completed': 0,
+            # Individual agent task completion counters
+            'planner_tasks_completed': 0,      # NEW: Reset Planner task completions
+            'assembler_tasks_completed': 0,    # NEW: Reset Assembler task completions
+            'developer_tasks_completed': 0,    # NEW: Reset Developer task completions
+            'reviewer_tasks_completed': 0,     # NEW: Reset Reviewer task completions
+            'tasks_completed': 0,               # Total tasks completed (sum of all agents)
             'tasks_failed': 0,
             'tasks_pending': 0,
             'tasks_moved_to_hitl': 0,
             'average_sonar_score': 0.0,
             'total_sonar_scores': 0.0,  # NEW: Reset total sonar scores
-            'sonar_score_count': 0  # NEW: Reset sonar score count
+            'sonar_score_count': 0,  # NEW: Reset sonar score count
+            'average_review_score': 0.0,  # NEW: Reset average reviewer score
+            'total_review_scores': 0.0,   # NEW: Reset total reviewer scores
+            'review_score_count': 0        # NEW: Reset review score count
         })
     global pending_tasks
     pending_tasks = 0

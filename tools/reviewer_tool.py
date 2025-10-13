@@ -609,8 +609,8 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
 
             total_files += 1
 
-            # Create temporary file for Pylint analysis
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
+            # Create temporary file for Pylint analysis with UTF-8 encoding
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_file:
                 temp_file.write(content)
                 temp_path = temp_file.name
 
@@ -619,16 +619,31 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                 pylint_output = StringIO()
                 reporter = JSONReporter(pylint_output)
 
-                # Run Pylint
-                pylint_args = [
-                    temp_path,
-                    '--output-format=json',
-                    '--reports=yes',
-                    '--score=yes'
-                ]
+                # Run Pylint with UTF-8 encoding environment
+                import sys
+                old_stdout = sys.stdout
+                old_stderr = sys.stderr
 
-                # Run Pylint and capture results
-                run = Run(pylint_args, reporter=reporter, exit=False)
+                # Redirect stdout/stderr to UTF-8 to avoid encoding issues
+                sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+                sys.stderr = open(os.devnull, 'w', encoding='utf-8')
+
+                try:
+                    pylint_args = [
+                        temp_path,
+                        '--output-format=json',
+                        '--reports=yes',
+                        '--score=yes'
+                    ]
+
+                    # Run Pylint and capture results
+                    run = Run(pylint_args, reporter=reporter, exit=False)
+                finally:
+                    # Restore stdout/stderr
+                    sys.stdout.close()
+                    sys.stderr.close()
+                    sys.stdout = old_stdout
+                    sys.stderr = old_stderr
 
                 # Parse results
                 pylint_output.seek(0)
@@ -641,22 +656,29 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                 convention_count = len([msg for msg in issues if msg['type'] == 'convention'])
                 refactor_count = len([msg for msg in issues if msg['type'] == 'refactor'])
 
-                # Collect all issues with proper structure
+                # Collect all issues with proper structure - sanitize strings to avoid encoding issues
                 for issue in issues:
+                    # Sanitize message text to remove problematic Unicode characters
+                    message = issue.get('message', '').encode('ascii', 'ignore').decode('ascii')
+                    symbol = issue.get('symbol', '').encode('ascii', 'ignore').decode('ascii')
+
                     all_issues_json.append({
                         "file": filename,
                         "line": issue.get('line', 0),
                         "column": issue.get('column', 0),
                         "type": issue.get('type', 'unknown'),
-                        "message": issue.get('message', ''),
-                        "symbol": issue.get('symbol', ''),
-                        "message_id": issue.get('message-id', '')  # Note: Pylint uses 'message-id' with hyphen
+                        "message": message,
+                        "symbol": symbol,
+                        "message_id": issue.get('message-id', '')
                     })
 
                 # Format issues for display
                 file_issues = []
                 for issue in issues:
-                    formatted_issue = f"Line {issue.get('line', 0)}: [{issue.get('type', 'unknown').upper()}] {issue.get('message', '')} ({issue.get('symbol', '')})"
+                    # Sanitize display text as well
+                    msg = issue.get('message', '').encode('ascii', 'ignore').decode('ascii')
+                    sym = issue.get('symbol', '').encode('ascii', 'ignore').decode('ascii')
+                    formatted_issue = f"Line {issue.get('line', 0)}: [{issue.get('type', 'unknown').upper()}] {msg} ({sym})"
                     file_issues.append(formatted_issue)
 
                 pylint_results[filename] = {

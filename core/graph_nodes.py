@@ -191,19 +191,6 @@ class WorkflowNodes:
                 total_score = sum(subtask.get("score", 0) for subtask in approved_subtasks)
                 avg_score = total_score / len(approved_subtasks) if approved_subtasks else 0
 
-                # Log detailed subtask information
-                core.router.safe_activity_log({
-                    "id": str(uuid.uuid4()),
-                    "timestamp": datetime.now().isoformat(),
-                    "agent": "PlannerAgent",
-                    "action": "Subtasks Generated",
-                    "details": f"Generated {len(approved_subtasks)} subtasks for {current_issue['key']}",
-                    "status": "success",
-                    "issueId": current_issue['key'],
-                    "subtasks": approved_subtasks,
-                    "totalScore": round(total_score, 2),
-                    "averageScore": round(avg_score, 2)
-                })
 
                 # Log: Planner Completed
                 core.router.safe_activity_log({
@@ -214,6 +201,12 @@ class WorkflowNodes:
                     "details": f"Planner Agent planning completed for {current_issue['key']}",
                     "status": "success",
                     "issueId": current_issue['key']
+                })
+
+                # Increment planner task completion
+                core.router.safe_stats_update({
+                    'planner_tasks_completed': 1,
+                    'tasks_completed': 1
                 })
 
             else:
@@ -284,9 +277,75 @@ class WorkflowNodes:
                 print(f"Assembler Agent Time Taken: {duration:.2f} seconds")
                 print(f"Overall Tokens Used: {state['tokens_used']}")
 
-                core.router.safe_stats_update({'assembler_generations': 1})
+                core.router.safe_stats_update({
+                    'assembler_generations': 1,
+                    'assembler_tasks_completed': 1,
+                    'tasks_completed': 1
+                })
 
-                # Log: Assembler Completed
+                # Extract document sections for UI display
+                deployment_doc = assemble_result.get("deployment_document", {})
+                markdown_content = assemble_result.get("markdown", "")
+
+                document_sections = []
+
+                # Extract key sections from the deployment document
+                if deployment_doc:
+                    # Project Overview
+                    project_overview = deployment_doc.get("project_overview", {})
+                    if project_overview:
+                        desc = project_overview.get("description", "")
+                        proj_type = project_overview.get("project_type", "")
+                        arch = project_overview.get("architecture", "")
+                        content = f"Type: {proj_type}\nArchitecture: {arch}\n\n{desc[:200]}..." if len(desc) > 200 else f"Type: {proj_type}\nArchitecture: {arch}\n\n{desc}"
+                        document_sections.append({"title": "Project Overview", "content": content})
+
+                    # File Structure
+                    file_structure = deployment_doc.get("file_structure", {})
+                    if file_structure and file_structure.get("files"):
+                        files = file_structure.get("files", [])
+                        file_list = "\n".join([f"• {f.get('filename', '')} ({f.get('type', '')}): {f.get('description', '')[:80]}..."
+                                               if len(f.get('description', '')) > 80
+                                               else f"• {f.get('filename', '')} ({f.get('type', '')}): {f.get('description', '')}"
+                                               for f in files[:5]])
+                        if len(files) > 5:
+                            file_list += f"\n... and {len(files) - 5} more files"
+                        document_sections.append({"title": f"File Structure ({len(files)} files)", "content": file_list})
+
+                    # Implementation Plan
+                    impl_plan = deployment_doc.get("implementation_plan", {})
+                    if impl_plan:
+                        phases = impl_plan.get("phases", [])
+                        if phases:
+                            phase_text = "\n".join([f"Phase {i+1}: {p.get('name', 'Unnamed')}" for i, p in enumerate(phases[:3])])
+                            if len(phases) > 3:
+                                phase_text += f"\n... and {len(phases) - 3} more phases"
+                            document_sections.append({"title": "Implementation Plan", "content": phase_text})
+
+                    # Technical Specifications
+                    tech_specs = deployment_doc.get("technical_specifications", {})
+                    if tech_specs:
+                        spec_count = len(tech_specs)
+                        spec_files = list(tech_specs.keys())[:3]
+                        spec_text = f"Specifications for {spec_count} file(s):\n" + "\n".join([f"• {f}" for f in spec_files])
+                        if spec_count > 3:
+                            spec_text += f"\n... and {spec_count - 3} more"
+                        document_sections.append({"title": "Technical Specifications", "content": spec_text})
+
+                # Update the existing "Processing" log with document sections
+                if document_sections:
+                    core.router.safe_activity_log({
+                        "id": str(uuid.uuid4()),
+                        "timestamp": datetime.now().isoformat(),
+                        "agent": "AssemblerAgent",
+                        "action": "Processing",
+                        "details": f"Assembler Agent document assembly completed for {current_issue['key']}",
+                        "status": "success",
+                        "issueId": current_issue['key'],
+                        "documentSections": document_sections
+                    })
+
+                # Log: Assembler Completed with document sections
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
@@ -294,7 +353,8 @@ class WorkflowNodes:
                     "action": "Document Assembly Completed",
                     "details": f"Assembler Agent document assembly completed for {current_issue['key']}",
                     "status": "success",
-                    "issueId": current_issue['key']
+                    "issueId": current_issue['key'],
+                    "documentSections": document_sections
                 })
 
             else:
@@ -368,7 +428,11 @@ class WorkflowNodes:
                 print(f"Developer Agent Time Taken: {duration:.2f} seconds")
                 print(f"Overall Tokens Used: {state['tokens_used']}")
 
-                core.router.safe_stats_update({'developer_generations': 1})
+                core.router.safe_stats_update({
+                    'developer_generations': 1,
+                    'developer_tasks_completed': 1,
+                    'tasks_completed': 1
+                })
 
                 # Log: Developer Completed
                 core.router.safe_activity_log({
@@ -451,11 +515,28 @@ class WorkflowNodes:
                 print(f"Reviewer Agent Time Taken: {duration:.2f} seconds")
                 print(f"Overall Tokens Used: {state['tokens_used']}")
 
-                core.router.safe_stats_update({'successful_reviews': 1, 'reviewer_generations': 1})
+                # Track reviewer score for averaging
+                review_score = review_result.get('overall_score', 0.0)
+                core.router.safe_stats_update({
+                    'successful_reviews': 1,
+                    'reviewer_generations': 1,
+                    'reviewer_tasks_completed': 1,
+                    'tasks_completed': 1,
+                    'total_review_scores': review_score,
+                    'review_score_count': 1
+                })
+
+                # Calculate average review score
+                with core.router.stats_lock:
+                    if core.router.processing_stats['review_score_count'] > 0:
+                        core.router.processing_stats['average_review_score'] = round(
+                            core.router.processing_stats['total_review_scores'] / core.router.processing_stats['review_score_count'],
+                            1
+                        )
 
                 status = "success" if review_result.get('approved', False) else "warning"
 
-                # Log: Reviewer Completed
+                # Log: Reviewer Completed with review scores including Pylint
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
@@ -463,7 +544,14 @@ class WorkflowNodes:
                     "action": "Code Review Completed",
                     "details": f"Reviewer Agent code review completed for {current_issue['key']}: Score {review_result.get('overall_score', 0)}%. Approved: {review_result.get('approved', False)}",
                     "status": status,
-                    "issueId": current_issue['key']
+                    "issueId": current_issue['key'],
+                    "reviewScores": {
+                        "overall": review_result.get('overall_score', 0.0),
+                        "completeness": review_result.get('completeness_score', 0.0),
+                        "security": review_result.get('security_score', 0.0),
+                        "standards": review_result.get('standards_score', 0.0),
+                        "pylint": review_result.get('pylint_score', 0.0)
+                    }
                 })
 
             else:

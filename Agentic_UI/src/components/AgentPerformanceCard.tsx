@@ -10,6 +10,11 @@ interface AgentPerformanceCardProps {
 
 export const AgentPerformanceCard: React.FC<AgentPerformanceCardProps> = ({ agent }) => {
   const formatTokens = (tokens: number) => {
+    // Validate token value - if unrealistic, return 0
+    if (!tokens || tokens < 0 || tokens > 10000000) {
+      return '0';
+    }
+
     if (tokens >= 1000000) {
       return `${(tokens / 1000000).toFixed(1)}M`;
     } else if (tokens >= 1000) {
