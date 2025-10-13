@@ -1,5 +1,5 @@
 # Updated graph/developer_graph.py
-from typing import Dict, Any, List, Optional, TypedDict
+from typing import Dict, Any, List, Optional, TypedDict, Annotated
 import re
 from langgraph.graph import StateGraph, START, END
 from tools.developer_tool import generate_code_files, correct_code_with_feedback, \
@@ -7,6 +7,8 @@ from tools.developer_tool import generate_code_files, correct_code_with_feedback
 from tools.utils import log_activity
 from ui.ui import workflow_status, workflow_status_lock
 import logging
+import queue  # NEW: Add import for queue
+from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,7 @@ class DeveloperState(TypedDict):
     """State for the developer sub-graph"""
     deployment_document: Dict[str, Any]
     thread_id: str
-    generated_files: Dict[str, str]
+    generated_files: Annotated[Dict[str, str], lambda x, y: {**x, **y}]  # NEW: Reducer for merging dicts
     feedback: Optional[List[str]]
     error: str
     global_project_memory: Dict[str, Any]
@@ -24,7 +26,8 @@ class DeveloperState(TypedDict):
     issue_data: Dict[str, Any]
     persistent_memory: Dict[str, Any]
     memory_updated: bool
-    tokens_used: int
+    tokens_used: Annotated[int, lambda x, y: x + y]  # NEW: Reducer for summing tokens
+    review_queue: Optional[queue.Queue]  # NEW: Add queue for reviewer handoff
 
 
 def _route_success_or_error(state: DeveloperState) -> str:
@@ -68,10 +71,13 @@ def _generate_code_node(state: DeveloperState) -> Dict[str, Any]:
     logger.info(f"[DEV-{thread_id}] Generating code files from deployment document...")
 
     try:
+        output_queue = state.get("review_queue")  # NEW: Get queue from state
+
         code_result = generate_code_files.invoke({
             "deployment_document": deployment_document,
             "issue_key": issue_data.get('key', 'UNKNOWN'),
-            "thread_id": thread_id
+            "thread_id": thread_id,
+            "output_queue": output_queue  # NEW: Pass queue to tool
         })
 
         if code_result.get("success"):

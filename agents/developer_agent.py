@@ -105,8 +105,17 @@ class DeveloperAgent:
 
     def generate_code(self, deployment_document: Dict[str, Any],
                       issue_data: Optional[Dict[str, Any]] = None, thread_id: Optional[str] = None,
-                      feedback: Optional[List[str]] = None) -> Dict[str, Any]:  # NEW: Add feedback param
-        """Run the code generation sub-graph using deployment document"""
+                      feedback: Optional[List[str]] = None, review_queue: Optional[Any] = None) -> Dict[str, Any]:
+        """
+        Run the code generation sub-graph using deployment document
+
+        Args:
+            deployment_document: Document with requirements
+            issue_data: Optional issue information
+            thread_id: Optional thread identifier
+            feedback: Optional feedback for correction
+            review_queue: Optional queue for parallel reviewer handoff
+        """
         if not thread_id:
             thread_id = f"DEVELOPER-{threading.current_thread().ident}"
 
@@ -133,9 +142,23 @@ class DeveloperAgent:
             if final_state.get("error"):
                 return {"success": False, "error": final_state["error"]}
 
+            generated_files = final_state.get("generated_files", {})
+
+            # NEW: If review_queue provided, push files for parallel review
+            if review_queue is not None:
+                try:
+                    review_queue.put({
+                        "files": generated_files,
+                        "issue_data": issue_data,
+                        "thread_id": thread_id
+                    })
+                    logger.info(f"[DEVELOPER-{thread_id}] Pushed files to review queue for parallel processing")
+                except Exception as e:
+                    logger.warning(f"[DEVELOPER-{thread_id}] Failed to push to review queue: {e}")
+
             return {
                 "success": True,
-                "generated_files": final_state.get("generated_files", {}),
+                "generated_files": generated_files,
                 "tokens_used": final_state.get("tokens_used", 0)
             }
 

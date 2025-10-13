@@ -1,4 +1,5 @@
-from typing import Dict, Any, List, Optional, TypedDict
+#Agent-flow\graph\reviewer_graph.py
+from typing import Dict, Any, List, Optional, TypedDict, Annotated
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from tools.reviewer_tool import (
@@ -9,6 +10,7 @@ from tools.reviewer_tool import (
 from ui.ui import workflow_status, workflow_status_lock
 import logging
 from threading import Lock
+import queue  # NEW: Add import for queue
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ class ReviewerState(TypedDict):
     """State structure for the LangGraph reviewer workflow."""
     # Input data
     issue_key: str
-    files: Dict[str, str]
+    files: Annotated[Dict[str, str], lambda x, y: {**x, **y}]  # NEW: Reducer for merging files
     file_types: List[str]
     project_description: str
     iteration: int
@@ -36,18 +38,24 @@ class ReviewerState(TypedDict):
     standards_result: Optional[Dict[str, Any]]
     pylint_result: Optional[Dict[str, Any]]  # NEW: Pylint analysis result
 
+    # NEW: Per-file results aggregation
+    per_file_results: Annotated[Dict[str, Dict], lambda x, y: {**x, **y}]  # Reducer for merging dicts
+
     # Final results
     overall_score: float
     threshold: float
     approved: bool
     all_issues: List[str]
-    tokens_used: int
+    tokens_used: Annotated[int, lambda x, y: x + y]  # NEW: Reducer for summing tokens
     mongodb_stored: bool
 
     # Metadata
     success: bool
     error: Optional[str]
     processing_time: float
+
+    # NEW: Queue for receiving files from developer
+    review_queue: Optional[queue.Queue]
 
 def _node_format_files(state: ReviewerState) -> ReviewerState:
     """LangGraph node: Format files for review processing."""
@@ -136,7 +144,7 @@ def _node_pylint_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens
+            state['tokens_used'] = tokens  # FIXED: Just assign, don't add (Annotated reducer handles it)
             logger.info(f"[{state['thread_id']}] Pylint analysis: {result['pylint_score']:.1f}/10 score, {result['files_analyzed']} files")
         else:
             logger.warning(f"[{state['thread_id']}] Pylint analysis failed: {result.get('error')}")
@@ -171,7 +179,7 @@ def _node_completeness_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens
+            state['tokens_used'] = tokens  # FIXED: Just assign, don't add
             logger.info(f"[{state['thread_id']}] Completeness analysis: {result['score']}% score")
         else:
             logger.warning(f"[{state['thread_id']}] Completeness analysis failed: {result.get('error')}")
@@ -193,10 +201,10 @@ def _node_security_analysis(state: ReviewerState) -> ReviewerState:
         if state.get('error'):
             return state
 
-        # Call simplified security analysis tool
+        # Call simplified security analysis tool - FIXED: Changed files_content to file_content
         result = analyze_code_security.invoke({
             "issue_key": state['issue_key'],
-            "files_content": state['formatted_files_content'],
+            "file_content": state['formatted_files_content'],  # FIXED: Changed to file_content (singular)
             "security_standards": state['security_guidelines'],
             "thread_id": state['thread_id']
         })
@@ -205,7 +213,7 @@ def _node_security_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens
+            state['tokens_used'] = tokens  # FIXED: Just assign, don't add
             logger.info(f"[{state['thread_id']}] Security analysis: {result['score']}% score")
         else:
             logger.warning(f"[{state['thread_id']}] Security analysis failed: {result.get('error')}")
@@ -227,10 +235,10 @@ def _node_standards_analysis(state: ReviewerState) -> ReviewerState:
         if state.get('error'):
             return state
 
-        # Call simplified standards analysis tool
+        # Call simplified standards analysis tool - FIXED: Changed files_content to file_content
         result = analyze_coding_standards.invoke({
             "file_types": state['file_types'],
-            "files_content": state['formatted_files_content'],
+            "file_content": state['formatted_files_content'],  # FIXED: Changed to file_content (singular)
             "language_standards": state['language_standards'],
             "thread_id": state['thread_id']
         })
@@ -239,7 +247,7 @@ def _node_standards_analysis(state: ReviewerState) -> ReviewerState:
 
         if result.get('success', False):
             tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens
+            state['tokens_used'] = tokens  # FIXED: Just assign, don't add
             logger.info(f"[{state['thread_id']}] Standards analysis: {result['score']}% score")
         else:
             logger.warning(f"[{state['thread_id']}] Standards analysis failed: {result.get('error')}")

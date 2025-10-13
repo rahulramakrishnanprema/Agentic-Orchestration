@@ -19,6 +19,8 @@ import sys
 from io import StringIO
 from dotenv import load_dotenv
 from tools.prompt_loader import PromptLoader
+from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
+import queue  # NEW: Add import for queue
 
 from config.settings import config as app_config
 from services.llm_service import call_llm
@@ -322,14 +324,14 @@ def analyze_code_completeness(issue_key: str, project_description: str, files_co
 
 
 @tool
-def analyze_code_security(issue_key: str, files_content: str, security_standards: str,
+def analyze_code_security(issue_key: str, file_content: str, security_standards: str,  # CHANGED: file_content instead of files_content
                           thread_id: str = "unknown") -> Dict[str, Any]:
     """
     Analyze code security vulnerabilities using LLM.
 
     Args:
         issue_key: Jira issue identifier
-        files_content: Formatted content of all files
+        file_content: Content of a single file
         security_standards: Security standards from knowledge base
         thread_id: Thread identifier for logging
     """
@@ -343,7 +345,7 @@ def analyze_code_security(issue_key: str, files_content: str, security_standards
         security_prompt = prompt_loader.format(
             "reviewer_security_analysis",
             issue_key=issue_key,
-            files_content=files_content,
+            files_content=file_content,  # CHANGED: Single file
             security_standards=security_standards
         )
 
@@ -373,14 +375,14 @@ def analyze_code_security(issue_key: str, files_content: str, security_standards
 
 
 @tool
-def analyze_coding_standards(file_types: List[str], files_content: str, language_standards: str,
+def analyze_coding_standards(file_types: List[str], file_content: str, language_standards: str,  # CHANGED: file_content instead of files_content
                              thread_id: str = "unknown") -> Dict[str, Any]:
     """
     Analyze code against coding standards using LLM.
 
     Args:
         file_types: List of file types being analyzed
-        files_content: Formatted content of all files
+        file_content: Content of a single file
         language_standards: Language-specific standards from knowledge base
         thread_id: Thread identifier for logging
     """
@@ -394,7 +396,7 @@ def analyze_coding_standards(file_types: List[str], files_content: str, language
         standards_prompt = prompt_loader.format(
             "reviewer_standards_analysis",
             file_types=", ".join(file_types),
-            files_content=files_content,
+            files_content=file_content,  # CHANGED: Single file
             language_standards=language_standards
         )
 
@@ -587,7 +589,6 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
         import os
         import json
         from io import StringIO
-        import sys
         from pylint.lint import Run
         from pylint.reporters import JSONReporter
 
@@ -618,7 +619,7 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                 pylint_output = StringIO()
                 reporter = JSONReporter(pylint_output)
 
-                # Run Pylint without any filters
+                # Run Pylint
                 pylint_args = [
                     temp_path,
                     '--output-format=json',
@@ -640,21 +641,23 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                 convention_count = len([msg for msg in issues if msg['type'] == 'convention'])
                 refactor_count = len([msg for msg in issues if msg['type'] == 'refactor'])
 
+                # Collect all issues with proper structure
+                for issue in issues:
+                    all_issues_json.append({
+                        "file": filename,
+                        "line": issue.get('line', 0),
+                        "column": issue.get('column', 0),
+                        "type": issue.get('type', 'unknown'),
+                        "message": issue.get('message', ''),
+                        "symbol": issue.get('symbol', ''),
+                        "message_id": issue.get('message-id', '')  # Note: Pylint uses 'message-id' with hyphen
+                    })
+
                 # Format issues for display
                 file_issues = []
                 for issue in issues:
-                    formatted_issue = f"Line {issue['line']}: [{issue['type'].upper()}] {issue['message']} ({issue['symbol']})"
+                    formatted_issue = f"Line {issue.get('line', 0)}: [{issue.get('type', 'unknown').upper()}] {issue.get('message', '')} ({issue.get('symbol', '')})"
                     file_issues.append(formatted_issue)
-                    all_issues.append(f"{filename} - {formatted_issue}")
-
-                    # Collect for LLM analysis
-                    all_issues_json.append({
-                        "file": filename,
-                        "line": issue['line'],
-                        "type": issue['type'],
-                        "message": issue['message'],
-                        "symbol": issue['symbol']
-                    })
 
                 pylint_results[filename] = {
                     'errors': error_count,
@@ -683,22 +686,32 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
 
-        # Define unwanted issues to filter
-        unwanted_symbols = ["missing-final-newline", "trailing-whitespace", "line-too-long"]
-        unwanted_ids = ["C0304", "C0303", "C0301"]
+        # Define unwanted cosmetic issues to filter (not critical for code quality)
+        unwanted_symbols = {
+            "missing-final-newline",
+            "trailing-whitespace",
+            "line-too-long",
+            "missing-module-docstring",  # Optional: can be removed if docstrings are important
+            "missing-class-docstring",   # Optional: can be removed if docstrings are important
+            "missing-function-docstring" # Optional: can be removed if docstrings are important
+        }
+        unwanted_ids = {"C0304", "C0303", "C0301"}  # Corresponding message IDs
 
-        # Filter issues
-        filtered_issues_json = [issue for issue in all_issues_json
-                                if issue["symbol"] not in unwanted_symbols
-                                and issue["message-id"] not in unwanted_ids]
+        # Filter out cosmetic issues
+        filtered_issues_json = [
+            issue for issue in all_issues_json
+            if issue["symbol"] not in unwanted_symbols and issue["message_id"] not in unwanted_ids
+        ]
 
-        # Update all_issues to filtered only
-        all_issues = [f"{issue['file']} - Line {issue['line']}: [{issue['type'].upper()}] {issue['message']} ({issue['symbol']})"
-                      for issue in filtered_issues_json]
+        # Format filtered issues for display
+        filtered_issues_display = [
+            f"{issue['file']} - Line {issue['line']}: [{issue['type'].upper()}] {issue['message']} ({issue['symbol']})"
+            for issue in filtered_issues_json
+        ]
 
-        logger.info(f"[{thread_id}] Filtered Pylint issues: {len(filtered_issues_json)} (from original {len(all_issues_json)})")
+        logger.info(f"[{thread_id}] Pylint issues: {len(filtered_issues_json)} significant (filtered {len(all_issues_json) - len(filtered_issues_json)} cosmetic issues)")
 
-        # Use LLM to analyze filtered Pylint issues and calculate intelligent score
+        # Always use LLM for scoring (even with 0 issues for consistency)
         if total_files == 0:
             return {
                 "success": True,
@@ -711,56 +724,81 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                 "tokens_used": 0
             }
 
-        if len(filtered_issues_json) == 0:
-            logger.info(f"[{thread_id}] No significant issues after filtering - assigning perfect score")
-            final_score = 100.0
-            reasoning = "No significant issues found after filtering minor style problems (e.g., line length, trailing whitespace, final newline)."
-            tokens = 0
-        else:
-            # Prepare issues for LLM analysis
+        # Prepare summary for LLM
+        total_errors = sum(r.get('errors', 0) for r in pylint_results.values())
+        total_warnings = sum(r.get('warnings', 0) for r in pylint_results.values())
+        total_conventions = sum(r.get('conventions', 0) for r in pylint_results.values())
+        total_refactors = sum(r.get('refactors', 0) for r in pylint_results.values())
+
+        # Prepare detailed issues for LLM (if any significant issues exist)
+        if len(filtered_issues_json) > 0:
             issues_json_str = json.dumps(filtered_issues_json, indent=2)
+        else:
+            issues_json_str = "[]"
 
-            # Use LLM to score the Pylint results
-            pylint_prompt = prompt_loader.format(
-                "pylint_score",
-                issues_json=issues_json_str
-            )
+        # Build comprehensive context for LLM scoring
+        pylint_context = f"""
+Files Analyzed: {total_files}
+Total Issues Found: {len(all_issues_json)}
+Issues After Filtering: {len(filtered_issues_json)}
 
-            content, tokens = call_llm(pylint_prompt, agent_name="reviewer")
+Issue Breakdown:
+- Errors: {total_errors}
+- Warnings: {total_warnings}
+- Conventions: {total_conventions}
+- Refactors: {total_refactors}
 
-            logger.info(f"[{thread_id}] LLM returned {len(content)} characters for Pylint scoring")
-            logger.debug(f"[{thread_id}] LLM response preview: {content[:200]}")
+Filtered out cosmetic issues: {len(all_issues_json) - len(filtered_issues_json)} (line-too-long, trailing-whitespace, missing-final-newline)
 
-            # Parse LLM result
-            parsed_result = parse_llm_result(content, "pylint")
+Significant Issues Details:
+{issues_json_str}
+"""
 
-            final_score = parsed_result.score
-            reasoning = parsed_result.reasoning
+        # Use LLM to score based on the pylint_score.md template
+        pylint_prompt = prompt_loader.format(
+            "pylint_score",
+            pylint_context=pylint_context,
+            files_analyzed=total_files,
+            total_issues=len(filtered_issues_json),
+            errors=total_errors,
+            warnings=total_warnings,
+            conventions=total_conventions,
+            refactors=total_refactors,
+            issues_json=issues_json_str
+        )
 
-            logger.info(f"[{thread_id}] LLM-powered Pylint score: {final_score}/100")
+        content, tokens = call_llm(pylint_prompt, agent_name="reviewer")
+
+        logger.info(f"[{thread_id}] LLM returned {len(content)} characters for Pylint scoring")
+        logger.debug(f"[{thread_id}] LLM response preview: {content[:200]}")
+
+        # Parse LLM result
+        parsed_result = parse_llm_result(content, "pylint")
+
+        final_score = parsed_result.score
+        reasoning = parsed_result.reasoning
+
+        logger.info(f"[{thread_id}] LLM-based Pylint score: {final_score}/100 ({len(filtered_issues_json)} significant issues)")
 
         return {
             "success": True,
             "score": final_score,
             "pylint_score": final_score / 10.0,  # Convert to 0-10 scale for compatibility
-            "mistakes": all_issues if all_issues else ["No issues found - excellent code quality!"],
+            "mistakes": filtered_issues_display if filtered_issues_display else ["No significant issues found - good code quality!"],
             "reasoning": reasoning,
             "file_results": pylint_results,
             "files_analyzed": total_files,
+            "total_issues": len(all_issues_json),
+            "significant_issues": len(filtered_issues_json),
+            "filtered_issues": len(all_issues_json) - len(filtered_issues_json),
             "tokens_used": tokens
         }
 
     except Exception as e:
         with stats_lock:
             tool_stats['errors'] += 1
-        logger.error(f"[{thread_id}] Pylint integration failed: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "score": 0.0,
-            "mistakes": [f"Pylint analysis failed: {str(e)}"],
-            "tokens_used": 0
-        }
+        logger.error(f"[{thread_id}] Pylint analysis failed: {e}")
+        return {"success": False, "error": str(e), "tokens_used": 0}
 
 
 def get_reviewer_tools():
@@ -807,3 +845,4 @@ def get_reviewer_tools_stats() -> Dict[str, Any]:
                 "pylint_integration"
             ]
         }
+

@@ -12,6 +12,8 @@ from langchain_core.tools import tool
 import re
 import os
 from tools.prompt_loader import PromptLoader
+from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
+import queue  # NEW: Add import for queue
 
 from config.settings import config as app_config
 from services.llm_service import call_llm
@@ -77,9 +79,9 @@ def save_files_locally(files: Dict[str, str], issue_key: str):
 
 @tool
 def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
-                        thread_id: str = "unknown") -> Dict[str, Any]:
+                        thread_id: str = "unknown", output_queue: Optional[queue.Queue] = None) -> Dict[str, Any]:
     """
-    Generate complete connected project code files from deployment document.
+    Generate complete connected project code files from deployment document in parallel.
     """
     try:
         with stats_lock:
@@ -95,8 +97,9 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
         specs = deployment_document.get("technical_specifications", {})
         implementation_plan = deployment_document.get("implementation_plan", {})
 
-        # Generate code for each file
-        for file_info in files:
+        max_workers = 4  # Configurable: limit concurrency to avoid rate limits
+
+        def generate_single_file(file_info):  # NEW: Helper for parallel execution
             filename = file_info.get('filename', '')
             file_type = file_info.get('type', '')
             extension = FILE_EXTENSIONS.get(file_type.lower(), ".txt")
@@ -115,7 +118,6 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
             )
 
             content, tokens = call_llm(prompt, agent_name="developer")
-            total_tokens += tokens
             generated_code = content.strip()
             if '```' in content:
                 lines = content.split('\n')
@@ -131,9 +133,25 @@ def generate_code_files(deployment_document: Dict[str, Any], issue_key: str,
                         code_lines.append(line)
                 generated_code = '\n'.join(code_lines)
             if generated_code and len(generated_code.strip()) > 0:
-                generated_files[filename] = generated_code
                 logging.info(f"[{thread_id}] Generated {filename}: {len(generated_code)} characters")
                 save_files_locally({filename: generated_code}, issue_key)
+                if output_queue:  # NEW: Push to queue if provided
+                    output_queue.put({"filename": filename, "content": generated_code})
+                return filename, generated_code, tokens
+            return None, None, tokens
+
+        # NEW: Parallel execution
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(generate_single_file, file_info) for file_info in files]
+            for future in as_completed(futures):
+                filename, content, tokens = future.result()
+                total_tokens += tokens
+                if filename and content:
+                    generated_files[filename] = content
+
+        if output_queue:  # NEW: Signal end of files
+            output_queue.put(None)
+
         if not generated_files:
             return {"success": False, "error": "No files generated for specified types", "tokens_used": total_tokens}
         return {"success": True, "generated_files": generated_files, "tokens_used": total_tokens}

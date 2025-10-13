@@ -395,6 +395,14 @@ class ReactUIHandler(BaseHTTPRequestHandler):
                         "lastActivity": current_time
                     },
                     {
+                        "id": "AssemblerAgent",  # FIXED: Added missing AssemblerAgent
+                        "name": "Assembler",
+                        "status": "active",
+                        "tasksProcessed": 0,
+                        "tokensConsumed": 0,
+                        "lastActivity": current_time
+                    },
+                    {
                         "id": "DeveloperAgent",
                         "name": "Developer",
                         "status": "active",
@@ -427,11 +435,19 @@ class ReactUIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.error(f"Current agents request error: {e}")
             current_time = datetime.now().strftime("%I:%M:%S %p")
-            # Return default agents on error
+            # Return default agents on error - FIXED: Added AssemblerAgent here too
             default_agents = [
                 {
                     "id": "PlannerAgent",
                     "name": "Planner",
+                    "status": "active",
+                    "tasksProcessed": 0,
+                    "tokensConsumed": 0,
+                    "lastActivity": current_time
+                },
+                {
+                    "id": "AssemblerAgent",  # FIXED: Added missing AssemblerAgent
+                    "name": "Assembler",
                     "status": "active",
                     "tasksProcessed": 0,
                     "tokensConsumed": 0,

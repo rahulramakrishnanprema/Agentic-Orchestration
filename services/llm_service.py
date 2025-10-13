@@ -260,14 +260,15 @@ class LLMService:
                 if max_tokens is not None:
                     data["max_completion_tokens"] = max_tokens
             elif is_gpt5_model:
-                # GPT-5 models: No temperature parameter (only default supported)
-                logger.info(f"Detected GPT-5 variant: {model}. Omitting temperature parameter.")
+                # GPT-5 models: Use Responses API with 'input' parameter instead of 'messages'
+                logger.info(f"Using GPT-5 variant: {model}. Using Responses API format with 'input' parameter.")
                 data = {
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt}]
+                    "input": prompt  # GPT-5 uses 'input' instead of 'messages'
                 }
                 if max_tokens is not None:
                     data["max_tokens"] = max_tokens
+                # Note: GPT-5 uses different response format - will be handled by extract_content
             else:
                 # Standard models: Full parameter support (GPT-4, Groq models, local LLMs, etc.)
                 data = {
@@ -278,7 +279,14 @@ class LLMService:
                 if max_tokens is not None:
                     data["max_tokens"] = max_tokens
 
-            extract_content = lambda r: r['choices'][0]['message']['content']
+            # Define content extraction based on model type
+            if is_gpt5_model:
+                # GPT-5 Responses API format
+                extract_content = lambda r: r['choices'][0]['message']['content'] if 'choices' in r else r.get('output', r.get('response', ''))
+            else:
+                # Standard OpenAI-compatible format
+                extract_content = lambda r: r['choices'][0]['message']['content']
+
             extract_tokens = lambda r: r.get('usage', {}).get('total_tokens', 0)
 
         # Make the API call to the URL provided in .env

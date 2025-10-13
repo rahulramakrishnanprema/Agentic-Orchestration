@@ -13,6 +13,8 @@ import uuid
 import time
 from datetime import datetime
 from typing import Dict, Any, TYPE_CHECKING
+import queue  # NEW: Add import
+import threading  # NEW: Add import
 
 if TYPE_CHECKING:
     from core.graph import RouterState, LangGraphWorkflow
@@ -123,16 +125,6 @@ class WorkflowNodes:
         else:
             log_activity(f"Failed to transition {current_issue['key']} to In Progress", thread_id)
 
-        core.router.safe_activity_log({
-            "id": str(uuid.uuid4()),
-            "timestamp": datetime.now().isoformat(),
-            "agent": "TaskAgent",
-            "action": "Processing Issue",
-            "details": f"Started processing {current_issue['key']}: {current_issue['summary']}",
-            "status": "info",
-            "issueId": current_issue['key']
-        })
-
         return state
 
     def node_plan_issue(self, state: 'RouterState') -> 'RouterState':
@@ -144,6 +136,31 @@ class WorkflowNodes:
             return state
 
         log_activity(f"Planning for issue: {current_issue['key']}", thread_id)
+
+        # Log: Planner Started
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "PlannerAgent",
+            "action": "Started",
+            "details": f"Planner Agent started for {current_issue['key']}",
+            "status": "starting",
+            "issueId": current_issue['key']
+        })
+
+        # Wait 2 seconds before processing
+        time.sleep(2)
+
+        # Log: Planner Processing
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "PlannerAgent",
+            "action": "Processing",
+            "details": f"Planner Agent processing planning for {current_issue['key']}",
+            "status": "info",
+            "issueId": current_issue['key']
+        })
 
         try:
             start_time = time.time()
@@ -188,13 +205,14 @@ class WorkflowNodes:
                     "averageScore": round(avg_score, 2)
                 })
 
+                # Log: Planner Completed
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
                     "agent": "PlannerAgent",
                     "action": "Planning Completed",
-                    "details": f"Planning for {current_issue['key']} done. Needs human: {state['needs_human']}",
-                    "status": "success" if not state['needs_human'] else "warning",
+                    "details": f"Planner Agent planning completed for {current_issue['key']}",
+                    "status": "success",
                     "issueId": current_issue['key']
                 })
 
@@ -217,6 +235,31 @@ class WorkflowNodes:
             return state
 
         log_activity(f"Assembling document for issue: {current_issue['key']}", thread_id)
+
+        # Log: Assembler Started
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "AssemblerAgent",
+            "action": "Started",
+            "details": f"Assembler Agent started for {current_issue['key']}",
+            "status": "starting",
+            "issueId": current_issue['key']
+        })
+
+        # Wait 2 seconds before processing
+        time.sleep(2)
+
+        # Log: Assembler Processing
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "AssemblerAgent",
+            "action": "Processing",
+            "details": f"Assembler Agent processing document assembly for {current_issue['key']}",
+            "status": "info",
+            "issueId": current_issue['key']
+        })
 
         try:
             start_time = time.time()
@@ -242,12 +285,14 @@ class WorkflowNodes:
                 print(f"Overall Tokens Used: {state['tokens_used']}")
 
                 core.router.safe_stats_update({'assembler_generations': 1})
+
+                # Log: Assembler Completed
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
                     "agent": "AssemblerAgent",
-                    "action": "Document Assembled",
-                    "details": f"Assembled deployment document for {current_issue['key']}",
+                    "action": "Document Assembly Completed",
+                    "details": f"Assembler Agent document assembly completed for {current_issue['key']}",
                     "status": "success",
                     "issueId": current_issue['key']
                 })
@@ -272,12 +317,41 @@ class WorkflowNodes:
 
         log_activity(f"Developing code for issue: {current_issue['key']}", thread_id)
 
+        # Log: Developer Started
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "DeveloperAgent",
+            "action": "Started",
+            "details": f"Developer Agent started for {current_issue['key']}",
+            "status": "info",
+            "issueId": current_issue['key']
+        })
+
+        # Log: Developer Processing
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "DeveloperAgent",
+            "action": "Processing",
+            "details": f"Developer Agent processing code generation for {current_issue['key']}",
+            "status": "info",
+            "issueId": current_issue['key']
+        })
+
         try:
             start_time = time.time()
+
+            # NEW: Create queue for file handoff
+            review_queue = queue.Queue()
+            state["review_queue"] = review_queue  # Pass to state for reviewer
+
+            # Run developer with queue
             code_result = self.developer_agent.generate_code(
                 deployment_document=deployment_document,
                 issue_data=current_issue,
-                thread_id=thread_id
+                thread_id=thread_id,
+                review_queue=review_queue  # NEW: Pass queue
             )
             duration = time.time() - start_time
 
@@ -295,12 +369,14 @@ class WorkflowNodes:
                 print(f"Overall Tokens Used: {state['tokens_used']}")
 
                 core.router.safe_stats_update({'developer_generations': 1})
+
+                # Log: Developer Completed
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
                     "agent": "DeveloperAgent",
-                    "action": "Code Generated",
-                    "details": f"Generated code for {current_issue['key']}. Files: {len(code_result.get('generated_files', {}))}",
+                    "action": "Code Generation Completed",
+                    "details": f"Developer Agent code generation completed for {current_issue['key']}. Files: {len(code_result.get('generated_files', {}))}",
                     "status": "success",
                     "issueId": current_issue['key']
                 })
@@ -324,6 +400,31 @@ class WorkflowNodes:
             return state
 
         log_activity(f"Reviewing code for issue: {current_issue['key']}", thread_id)
+
+        # Log: Reviewer Started
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "ReviewerAgent",
+            "action": "Started",
+            "details": f"Reviewer Agent started for {current_issue['key']}",
+            "status": "starting",
+            "issueId": current_issue['key']
+        })
+
+        # Wait 2 seconds before processing
+        time.sleep(2)
+
+        # Log: Reviewer Processing
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "ReviewerAgent",
+            "action": "Processing",
+            "details": f"Reviewer Agent processing code review for {current_issue['key']}",
+            "status": "info",
+            "issueId": current_issue['key']
+        })
 
         try:
             start_time = time.time()
@@ -353,12 +454,14 @@ class WorkflowNodes:
                 core.router.safe_stats_update({'successful_reviews': 1, 'reviewer_generations': 1})
 
                 status = "success" if review_result.get('approved', False) else "warning"
+
+                # Log: Reviewer Completed
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
                     "agent": "ReviewerAgent",
-                    "action": "Code Reviewed",
-                    "details": f"Review for {current_issue['key']}: Score {review_result.get('overall_score', 0)}%. Approved: {review_result.get('approved', False)}",
+                    "action": "Code Review Completed",
+                    "details": f"Reviewer Agent code review completed for {current_issue['key']}: Score {review_result.get('overall_score', 0)}%. Approved: {review_result.get('approved', False)}",
                     "status": status,
                     "issueId": current_issue['key']
                 })
@@ -472,7 +575,7 @@ class WorkflowNodes:
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
-                    "agent": "TaskAgent",
+                    "agent": "GitHubAgent",  # FIXED: Changed from TaskAgent to GitHubAgent for PR creation
                     "action": "PR Created",
                     "details": f"Created/updated PR for {current_issue['key']}: {pr_url}",
                     "status": "success",
@@ -724,4 +827,3 @@ class WorkflowNodes:
         except Exception as e:
             log_activity(f"Unexpected error in PR creation: {e}", thread_id)
             return False, ""
-

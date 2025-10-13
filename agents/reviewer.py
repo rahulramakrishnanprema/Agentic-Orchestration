@@ -72,13 +72,36 @@ class SimplifiedReviewer:
 
     def review_generated_code_with_langgraph(self, issue_key: str, files: Dict[str, str],
                                            file_types: List[str], project_description: str,
-                                           iteration: int = 1, thread_id: Optional[str] = None) -> Dict[str, Any]:
+                                           iteration: int = 1, thread_id: Optional[str] = None,
+                                           review_queue: Optional[Any] = None) -> Dict[str, Any]:
         """
         Main review processing method using simplified LangGraph workflow.
         Maintains exact same interface and functionality as original.
+
+        Args:
+            issue_key: Issue identifier
+            files: Dictionary of filename -> code content
+            file_types: List of file types being reviewed
+            project_description: Description of the project
+            iteration: Review iteration number
+            thread_id: Optional thread identifier
+            review_queue: Optional queue to consume files from (for parallel processing)
         """
         if not thread_id:
             thread_id = str(threading.current_thread().ident)[-6:]
+
+        # NEW: If review_queue provided, consume from it (parallel mode)
+        if review_queue is not None:
+            try:
+                logger.info(f"[{thread_id}] Waiting for files from review queue...")
+                queue_data = review_queue.get(timeout=300)  # 5 min timeout
+                files = queue_data.get("files", files)
+                issue_data = queue_data.get("issue_data", {})
+                issue_key = issue_data.get("key", issue_key)
+                project_description = issue_data.get("summary", project_description)
+                logger.info(f"[{thread_id}] Retrieved files from queue for parallel review")
+            except Exception as e:
+                logger.warning(f"[{thread_id}] Failed to get from review queue: {e}, using provided files")
 
         start_time = time.time()
 

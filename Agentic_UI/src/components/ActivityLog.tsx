@@ -16,6 +16,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
       case 'success': return <CheckCircle className="w-4 h-4 text-green-600" />;
       case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
       case 'error': return <XCircle className="w-4 h-4 text-red-600" />;
+              case 'starting': return <Clock className="w-4 h-4 text-amber-500" />;
       default: return <Info className="w-4 h-4 text-blue-600" />;
     }
   };
@@ -25,6 +26,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
       case 'success': return 'border-l-green-500 bg-green-50';
       case 'warning': return 'border-l-yellow-500 bg-yellow-50';
       case 'error': return 'border-l-red-500 bg-red-50';
+      case 'starting': return 'border-l-amber-400 bg-amber-50';
       default: return 'border-l-blue-500 bg-blue-50';
     }
   };
