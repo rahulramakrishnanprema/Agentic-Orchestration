@@ -44,7 +44,7 @@ class ReviewerState(TypedDict):
     threshold: float
     approved: bool
     all_issues: List[str]
-    tokens_used: Annotated[int, lambda x, y: x + y]  # Sum tokens from parallel branches
+    tokens_used: int  # FIXED: Removed reducer - will calculate manually in finalize node
     mongodb_stored: bool
 
     # Metadata
@@ -173,6 +173,7 @@ def _node_completeness_analysis(state: ReviewerState) -> ReviewerState:
             "thread_id": state['thread_id']
         })
 
+        # FIXED: Only return analyses, not tokens_used (will be calculated in finalize)
         return {"analyses": {"completeness": result}}
 
     except Exception as error:
@@ -190,14 +191,15 @@ def _node_security_analysis(state: ReviewerState) -> ReviewerState:
         if state.get('error'):
             return state
 
-        # Call simplified security analysis tool - FIXED: Changed files_content to file_content
+        # Call simplified security analysis tool
         result = analyze_code_security.invoke({
             "issue_key": state['issue_key'],
-            "file_content": state['formatted_files_content'],  # FIXED: Changed to file_content (singular)
+            "file_content": state['formatted_files_content'],
             "security_standards": state['security_guidelines'],
             "thread_id": state['thread_id']
         })
 
+        # FIXED: Only return analyses, not tokens_used (will be calculated in finalize)
         return {"analyses": {"security": result}}
 
     except Exception as error:
@@ -215,14 +217,15 @@ def _node_standards_analysis(state: ReviewerState) -> ReviewerState:
         if state.get('error'):
             return state
 
-        # Call simplified standards analysis tool - FIXED: Changed files_content to file_content
+        # Call simplified standards analysis tool
         result = analyze_coding_standards.invoke({
             "file_types": state['file_types'],
-            "file_content": state['formatted_files_content'],  # FIXED: Changed to file_content (singular)
+            "file_content": state['formatted_files_content'],
             "language_standards": state['language_standards'],
             "thread_id": state['thread_id']
         })
 
+        # FIXED: Only return analyses, not tokens_used (will be calculated in finalize)
         return {"analyses": {"standards": result}}
 
     except Exception as error:
@@ -360,19 +363,23 @@ def _node_finalize_review(state: ReviewerState) -> ReviewerState:
         if not state.get('error'):
             state['success'] = True
 
-            # ADDED: Log detailed token breakdown
+            # FIXED: Manually calculate total tokens from all analysis results
             analyses = state.get('analyses', {})
             pylint_tokens = state.get('pylint_result', {}).get('tokens_used', 0) if state.get('pylint_result') else 0
             completeness_tokens = analyses.get('completeness', {}).get('tokens_used', 0) if analyses.get('completeness') else 0
             security_tokens = analyses.get('security', {}).get('tokens_used', 0) if analyses.get('security') else 0
             standards_tokens = analyses.get('standards', {}).get('tokens_used', 0) if analyses.get('standards') else 0
 
+            # Calculate the correct total
+            total_tokens = pylint_tokens + completeness_tokens + security_tokens + standards_tokens
+            state['tokens_used'] = total_tokens
+
             logger.info(f"[{state['thread_id']}] Token Usage Breakdown:")
             logger.info(f"[{state['thread_id']}]   - Pylint: {pylint_tokens}")
             logger.info(f"[{state['thread_id']}]   - Completeness: {completeness_tokens}")
             logger.info(f"[{state['thread_id']}]   - Security: {security_tokens}")
             logger.info(f"[{state['thread_id']}]   - Standards: {standards_tokens}")
-            logger.info(f"[{state['thread_id']}]   - Total: {state['tokens_used']}")
+            logger.info(f"[{state['thread_id']}]   - Total: {total_tokens}")
             logger.info(f"[{state['thread_id']}] Review finalized successfully: {state['overall_score']}%")
         else:
             state['success'] = False

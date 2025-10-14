@@ -18,7 +18,7 @@ CRITICAL REQUIREMENTS:
 4. Ensure proper JSON syntax with balanced braces and brackets
 5. Do NOT add any text before or after the JSON object
 6. If the project is backend-based, implement only in Python. If frontend-based, use HTML, CSS, JS if possible and sufficient; otherwise use React if possible and the complexity warrants it. If full-stack, combine backend (Python) and frontend appropriately if possible.
-
+7.give only nedded files, never want any unwanted files .only give the 3 file with full project never give more files only 3 only 3
 Output a SINGLE JSON object with this exact structure (no extra text or markdown):
 
 {

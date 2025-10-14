@@ -505,15 +505,17 @@ class WorkflowNodes:
             state["review_result"] = review_result
             state["reviewer_tokens"] = review_result.get("tokens_used", 0)
 
+            # FIXED: Track tokens ALWAYS, not just on success (like other agents)
+            state["tokens_used"] += review_result.get("tokens_used", 0)
+            core.router.safe_stats_update({'reviewer_tokens': review_result.get("tokens_used", 0)})
+
+            # Print metrics
+            print(f"Reviewer Agent Tokens Used: {review_result.get('tokens_used', 0)}")
+            print(f"Reviewer Agent Time Taken: {duration:.2f} seconds")
+            print(f"Overall Tokens Used: {state['tokens_used']}")
+
             if review_result.get('success', False):
                 log_activity(f"Review completed: {review_result.get('overall_score', 0)}%", thread_id)
-                state["tokens_used"] += review_result.get("tokens_used", 0)
-                core.router.safe_stats_update({'reviewer_tokens': review_result.get("tokens_used", 0)})
-
-                # Print metrics
-                print(f"Reviewer Agent Tokens Used: {review_result.get('tokens_used', 0)}")
-                print(f"Reviewer Agent Time Taken: {duration:.2f} seconds")
-                print(f"Overall Tokens Used: {state['tokens_used']}")
 
                 # Track reviewer score for averaging
                 review_score = review_result.get('overall_score', 0.0)
