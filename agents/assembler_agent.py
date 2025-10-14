@@ -105,7 +105,7 @@ class AssemblerAgent:
             thread_id: Thread identifier
 
         Returns:
-            Dict with deployment_document, markdown, and metadata
+            Dict with deployment_document and metadata
         """
         if not thread_id:
             thread_id = f"ASSEMBLER-{os.getpid()}"

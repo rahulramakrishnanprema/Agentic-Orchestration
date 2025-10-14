@@ -52,11 +52,11 @@ def parse_json_from_text(text: str) -> Dict:
         # Clean the response - remove markdown code blocks if present
         cleaned_text = text.strip()
         if cleaned_text.startswith('```json'):
-            cleaned_text = cleaned_text[7:]  # Remove ```json
+            cleaned_text = cleaned_text[7:]
         elif cleaned_text.startswith('```'):
-            cleaned_text = cleaned_text[3:]  # Remove ```
+            cleaned_text = cleaned_text[3:]
         if cleaned_text.endswith('```'):
-            cleaned_text = cleaned_text[:-3]  # Remove trailing ```
+            cleaned_text = cleaned_text[:-3]
         cleaned_text = cleaned_text.strip()
 
         # Try to find JSON object in the cleaned text
@@ -180,7 +180,8 @@ def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[s
 @tool
 def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str, thread_id: str = "unknown") -> Dict[str, Any]:
     """
-    Merge scored subtasks into three main subtasks covering the complete JIRA description.
+    Merge scored subtasks into main subtasks covering the complete JIRA description.
+    Supports flexible number of subtasks based on complexity.
     Args:
         scored_subtasks: List of scored subtasks
         jira_description: Full JIRA issue description for coverage
@@ -189,7 +190,7 @@ def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str,
     try:
         with stats_lock:
             tool_stats['merging_calls'] += 1
-        logging.info(f"[{thread_id}] Merging subtasks into three main ones")
+        logging.info(f"[{thread_id}] Merging subtasks into main ones")
 
         subtasks_text = "\n".join([
             f"ID: {st['id']}, Score: {st['score']}, Description: {st['description']}, Reasoning: {st['reasoning']}"
@@ -236,9 +237,9 @@ def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str,
             logger.error(f"[{thread_id}] Content ends with: ...{cleaned_content[-200:]}")
             raise ValueError(f"Failed to parse merged subtasks (possible truncation): {str(e)}")
 
-        if not merged or len(merged) != 3:
-            logger.warning(f"[{thread_id}] Expected 3 merged subtasks, got {len(merged) if merged else 0}")
-            raise ValueError(f"Expected exactly 3 merged subtasks, got {len(merged) if merged else 0}")
+        if not merged:
+            logger.warning(f"[{thread_id}] No merged subtasks generated")
+            raise ValueError("No merged subtasks were generated")
 
         # Validate that each merged subtask has required fields
         for i, subtask in enumerate(merged):

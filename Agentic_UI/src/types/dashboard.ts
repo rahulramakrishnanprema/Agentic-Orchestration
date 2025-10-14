@@ -38,7 +38,6 @@ export interface ActivityLog {
     title: string;
     content: string;
   }>;
-  deploymentDocument?: string;  // NEW: Full deployment document markdown content
   totalScore?: number;
   averageScore?: number;
   pylintScore?: number;  // NEW: Pylint score (0-10 scale)

@@ -690,7 +690,11 @@ def analyze_python_code_with_pylint(files_content: Dict[str, str], thread_id: st
                     'total_issues': len(issues)
                 }
 
-                logger.info(f"[{thread_id}] Pylint found {len(issues)} issues in {filename} (E:{error_count} W:{warning_count} C:{convention_count} R:{refactor_count})")
+                # Always log that we're reviewing the file, but don't show counts if 0 issues
+                if len(issues) > 0:
+                    logger.info(f"[{thread_id}] Pylint reviewing {filename} - Found issues (E:{error_count} W:{warning_count} C:{convention_count} R:{refactor_count})")
+                else:
+                    logger.info(f"[{thread_id}] Pylint reviewing {filename}")
 
             except Exception as e:
                 logger.error(f"[{thread_id}] Pylint analysis failed for {filename}: {e}")

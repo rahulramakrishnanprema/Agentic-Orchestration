@@ -1,23 +1,29 @@
-# Updated graph/developer_graph.py
+import json
 from typing import Dict, Any, List, Optional, TypedDict, Annotated
 import re
 from langgraph.graph import StateGraph, START, END
-from tools.developer_tool import generate_code_files, correct_code_with_feedback, \
-    save_files_locally
+from langgraph.constants import Send
+from tools.developer_tool import correct_code_with_feedback, save_files_locally
+from tools.prompt_loader import PromptLoader
 from tools.utils import log_activity
 from ui.ui import workflow_status, workflow_status_lock
 import logging
 import queue  # NEW: Add import for queue
 from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
+from services.llm_service import call_llm  # Import for per-file generation
 
 logger = logging.getLogger(__name__)
+
+# Initialize prompt loader
+prompt_loader = PromptLoader("prompts")
 
 
 class DeveloperState(TypedDict):
     """State for the developer sub-graph"""
     deployment_document: Dict[str, Any]
+    files_to_generate: List[Dict[str, Any]]  # NEW: List of file specs for parallel generation
     thread_id: str
-    generated_files: Annotated[Dict[str, str], lambda x, y: {**x, **y}]  # NEW: Reducer for merging dicts
+    generated_files: Annotated[Dict[str, str], lambda x, y: {**x, **y}]  # Reducer for merging dicts
     feedback: Optional[List[str]]
     error: str
     global_project_memory: Dict[str, Any]
@@ -26,8 +32,8 @@ class DeveloperState(TypedDict):
     issue_data: Dict[str, Any]
     persistent_memory: Dict[str, Any]
     memory_updated: bool
-    tokens_used: Annotated[int, lambda x, y: x + y]  # NEW: Reducer for summing tokens
-    review_queue: Optional[queue.Queue]  # NEW: Add queue for reviewer handoff
+    tokens_used: Annotated[int, lambda x, y: x + y]  # Reducer for summing tokens
+    review_queue: Optional[queue.Queue]  # Add queue for reviewer handoff
 
 
 def _route_success_or_error(state: DeveloperState) -> str:
@@ -61,37 +67,67 @@ def _load_memory_context_node(state: DeveloperState) -> Dict[str, Any]:
     return state
 
 
-def _generate_code_node(state: DeveloperState) -> Dict[str, Any]:
-    with workflow_status_lock:
-        workflow_status["agent"] = "DeveloperAgent"
-    thread_id = state.get("thread_id", "unknown")
-    deployment_document = state.get("deployment_document", {})
-    issue_data = state.get("issue_data", {})
+def _plan_files_node(state: DeveloperState) -> Dict[str, Any]:
+    """Extract and plan files for parallel generation."""
+    file_structure = state['deployment_document'].get('file_structure', {})
+    files = file_structure.get('files', [])
+    state['files_to_generate'] = files
+    return state
 
-    logger.info(f"[DEV-{thread_id}] Generating code files from deployment document...")
 
-    try:
-        output_queue = state.get("review_queue")  # NEW: Get queue from state
+def generate_file(state: DeveloperState) -> Dict[str, Any]:
+    """Generate code for a single file (called in parallel)."""
+    file_info = state['file_info']  # Sub-state for each branch
+    filename = file_info.get('filename', '')
+    file_type = file_info.get('type', '')
 
-        code_result = generate_code_files.invoke({
-            "deployment_document": deployment_document,
-            "issue_key": issue_data.get('key', 'UNKNOWN'),
-            "thread_id": thread_id,
-            "output_queue": output_queue  # NEW: Pass queue to tool
+    logger.info(f"[DEV-{state['thread_id']}] Generating {filename}")
+
+    spec = state['deployment_document']['technical_specifications'].get(filename, {})
+    spec_text = "\n".join([f"{k}: {v}" for k, v in spec.items()])
+
+    prompt = prompt_loader.format(
+        "developer_code_generation",
+        filename=filename,
+        file_type=file_type,
+        issue_key=state['issue_data'].get('key'),
+        spec_text=spec_text,
+        implementation_plan=json.dumps(state['deployment_document']['implementation_plan'], indent=2),
+        file_structure=json.dumps(state['deployment_document']['file_structure'], indent=2)
+    )
+
+    content, tokens = call_llm(prompt, agent_name="developer")
+    generated_code = content.strip()
+
+    # Clean code block if present
+    if '```' in generated_code:
+        generated_code = re.sub(r'```.*?\n', '', generated_code, flags=re.DOTALL)
+        generated_code = generated_code.rsplit('```', 1)[0].strip()
+
+    return {
+        "generated_files": {filename: generated_code},
+        "tokens_used": tokens
+    }
+
+
+def _route_to_file_generation(state: DeveloperState) -> List[Send]:
+    """Fan-out to parallel file generation nodes."""
+    return [Send("generate_file", {"file_info": f, **state}) for f in
+            state["files_to_generate"]]  # Pass full state if needed
+
+
+def _merge_generated_files_node(state: DeveloperState) -> Dict[str, Any]:
+    """Fan-in: Merge generated files and proceed to memory update."""
+    save_files_locally(state['generated_files'], state['issue_data'].get('key', 'UNKNOWN'))
+
+    if state.get('review_queue'):
+        state['review_queue'].put({
+            "files": state['generated_files'],
+            "issue_data": state['issue_data'],
+            "thread_id": state['thread_id']
         })
 
-        if code_result.get("success"):
-            state["generated_files"] = code_result.get("generated_files", {})
-            log_activity(f"Code developed for {issue_data.get('key', 'UNKNOWN')}", thread_id)
-            state["tokens_used"] += code_result.get("tokens_used", 0)
-        else:
-            return {"error": code_result.get("error", "Code generation failed")}
-
-        return state
-
-    except Exception as error:
-        logger.error(f"[DEV-{thread_id}] Code generation failed: {error}")
-        return {"error": str(error)}
+    return state
 
 
 def _update_memory_after_generation_node(state: DeveloperState) -> Dict[str, Any]:
@@ -239,7 +275,9 @@ def build_developer_graph():
     # Add nodes
     graph.add_node("check_feedback", _check_feedback_node)
     graph.add_node("load_memory_context", _load_memory_context_node)
-    graph.add_node("generate_code", _generate_code_node)
+    graph.add_node("plan_files", _plan_files_node)
+    graph.add_node("generate_file", generate_file)  # Parallel target
+    graph.add_node("merge_generated_files", _merge_generated_files_node)
     graph.add_node("update_memory_after_generation", _update_memory_after_generation_node)
     graph.add_node("accumulate_feedback", _accumulate_feedback_node)
     graph.add_node("correct_code", _correct_code_node)
@@ -249,10 +287,11 @@ def build_developer_graph():
     # Edges
     graph.add_edge(START, "check_feedback")
     graph.add_conditional_edges("check_feedback", _route_feedback,
-                                {"generate": "load_memory_context", "correct": "accumulate_feedback"})  # NEW: Route to accumulate before correct
-    graph.add_edge("load_memory_context", "generate_code")
-    graph.add_conditional_edges("generate_code", _route_success_or_error,
-                                {"success": "update_memory_after_generation", "error": "handle_error"})
+                                {"generate": "load_memory_context", "correct": "accumulate_feedback"})
+    graph.add_edge("load_memory_context", "plan_files")
+    graph.add_conditional_edges("plan_files", _route_to_file_generation, ["generate_file"])
+    graph.add_edge("generate_file", "merge_generated_files")
+    graph.add_edge("merge_generated_files", "update_memory_after_generation")
     graph.add_conditional_edges("update_memory_after_generation", _route_success_or_error,
                                 {"success": "compile_results", "error": "handle_error"})
     graph.add_conditional_edges("accumulate_feedback", _route_success_or_error,

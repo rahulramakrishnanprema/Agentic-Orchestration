@@ -1,6 +1,6 @@
-#Agent-flow\graph\reviewer_graph.py
 from typing import Dict, Any, List, Optional, TypedDict, Annotated
 from langgraph.graph import StateGraph, END
+from langgraph.constants import Send
 from langgraph.checkpoint.memory import MemorySaver
 from tools.reviewer_tool import (
     format_files_for_review, get_knowledge_base_content, analyze_code_completeness,
@@ -32,11 +32,9 @@ class ReviewerState(TypedDict):
     security_guidelines: str
     language_standards: str
 
-    # Analysis results
-    completeness_result: Optional[Dict[str, Any]]
-    security_result: Optional[Dict[str, Any]]
-    standards_result: Optional[Dict[str, Any]]
-    pylint_result: Optional[Dict[str, Any]]  # NEW: Pylint analysis result
+    # Analysis results with reducers for merging parallel outputs
+    analyses: Annotated[Dict[str, Dict], lambda x, y: {**x, **y}]  # Merge dict of analysis results
+    pylint_result: Optional[Dict[str, Any]]  # Pylint as separate since it's not LLM-based
 
     # NEW: Per-file results aggregation
     per_file_results: Annotated[Dict[str, Dict], lambda x, y: {**x, **y}]  # Reducer for merging dicts
@@ -46,7 +44,7 @@ class ReviewerState(TypedDict):
     threshold: float
     approved: bool
     all_issues: List[str]
-    tokens_used: int  # FIXED: Removed reducer annotation - manual accumulation only
+    tokens_used: Annotated[int, lambda x, y: x + y]  # Sum tokens from parallel branches
     mongodb_stored: bool
 
     # Metadata
@@ -175,16 +173,7 @@ def _node_completeness_analysis(state: ReviewerState) -> ReviewerState:
             "thread_id": state['thread_id']
         })
 
-        state['completeness_result'] = result
-
-        if result.get('success', False):
-            tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
-            logger.info(f"[{state['thread_id']}] Completeness analysis: {result['score']}% score, tokens: {tokens}")
-        else:
-            logger.warning(f"[{state['thread_id']}] Completeness analysis failed: {result.get('error')}")
-
-        return state
+        return {"analyses": {"completeness": result}}
 
     except Exception as error:
         state['error'] = f"Completeness analysis node error: {error}"
@@ -209,16 +198,7 @@ def _node_security_analysis(state: ReviewerState) -> ReviewerState:
             "thread_id": state['thread_id']
         })
 
-        state['security_result'] = result
-
-        if result.get('success', False):
-            tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
-            logger.info(f"[{state['thread_id']}] Security analysis: {result['score']}% score, tokens: {tokens}")
-        else:
-            logger.warning(f"[{state['thread_id']}] Security analysis failed: {result.get('error')}")
-
-        return state
+        return {"analyses": {"security": result}}
 
     except Exception as error:
         state['error'] = f"Security analysis node error: {error}"
@@ -243,20 +223,19 @@ def _node_standards_analysis(state: ReviewerState) -> ReviewerState:
             "thread_id": state['thread_id']
         })
 
-        state['standards_result'] = result
-
-        if result.get('success', False):
-            tokens = result.get('tokens_used', 0)
-            state['tokens_used'] = state.get('tokens_used', 0) + tokens  # Manually accumulate
-            logger.info(f"[{state['thread_id']}] Standards analysis: {result['score']}% score, tokens: {tokens}")
-        else:
-            logger.warning(f"[{state['thread_id']}] Standards analysis failed: {result.get('error')}")
-
-        return state
+        return {"analyses": {"standards": result}}
 
     except Exception as error:
         state['error'] = f"Standards analysis node error: {error}"
         return state
+
+def _route_to_analyses(state: ReviewerState):
+    """Fan-out to parallel analysis nodes after Pylint."""
+    return [
+        Send("completeness_analysis", state),
+        Send("security_analysis", state),
+        Send("standards_analysis", state)
+    ]
 
 def _node_calculate_scores(state: ReviewerState) -> ReviewerState:
     """LangGraph node: Calculate overall scores and approval status."""
@@ -270,9 +249,10 @@ def _node_calculate_scores(state: ReviewerState) -> ReviewerState:
             return state
 
         # Get individual scores with proper fallback handling
-        completeness_result = state.get('completeness_result', {})
-        security_result = state.get('security_result', {})
-        standards_result = state.get('standards_result', {})
+        analyses = state.get('analyses', {})
+        completeness_result = analyses.get('completeness', {})
+        security_result = analyses.get('security', {})
+        standards_result = analyses.get('standards', {})
 
         # Check if at least one analysis succeeded
         has_valid_analysis = (
@@ -335,10 +315,15 @@ def _node_store_results(state: ReviewerState) -> ReviewerState:
         if state.get('error'):
             return state
 
-        # Get individual scores
-        completeness_score = state['completeness_result'].get('score', 75.0) if state['completeness_result'] else 75.0
-        security_score = state['security_result'].get('score', 70.0) if state['security_result'] else 70.0
-        standards_score = state['standards_result'].get('score', 80.0) if state['standards_result'] else 80.0
+        # Get individual scores from analyses dictionary
+        analyses = state.get('analyses', {})
+        completeness_result = analyses.get('completeness', {})
+        security_result = analyses.get('security', {})
+        standards_result = analyses.get('standards', {})
+
+        completeness_score = completeness_result.get('score', 75.0) if completeness_result and completeness_result.get('success') else 75.0
+        security_score = security_result.get('score', 70.0) if security_result and security_result.get('success') else 70.0
+        standards_score = standards_result.get('score', 80.0) if standards_result and standards_result.get('success') else 80.0
 
         # Call simplified MongoDB storage tool
         result = store_review_in_mongodb.invoke({
@@ -376,10 +361,11 @@ def _node_finalize_review(state: ReviewerState) -> ReviewerState:
             state['success'] = True
 
             # ADDED: Log detailed token breakdown
+            analyses = state.get('analyses', {})
             pylint_tokens = state.get('pylint_result', {}).get('tokens_used', 0) if state.get('pylint_result') else 0
-            completeness_tokens = state.get('completeness_result', {}).get('tokens_used', 0) if state.get('completeness_result') else 0
-            security_tokens = state.get('security_result', {}).get('tokens_used', 0) if state.get('security_result') else 0
-            standards_tokens = state.get('standards_result', {}).get('tokens_used', 0) if state.get('standards_result') else 0
+            completeness_tokens = analyses.get('completeness', {}).get('tokens_used', 0) if analyses.get('completeness') else 0
+            security_tokens = analyses.get('security', {}).get('tokens_used', 0) if analyses.get('security') else 0
+            standards_tokens = analyses.get('standards', {}).get('tokens_used', 0) if analyses.get('standards') else 0
 
             logger.info(f"[{state['thread_id']}] Token Usage Breakdown:")
             logger.info(f"[{state['thread_id']}]   - Pylint: {pylint_tokens}")
@@ -414,13 +400,13 @@ def build_reviewer_graph():
     workflow.add_node("store_results", _node_store_results)
     workflow.add_node("finalize_review", _node_finalize_review)
 
-    # Define workflow edges (exactly the same)
+    # Define workflow edges with parallelism after pylint
     workflow.set_entry_point("format_files")
     workflow.add_edge("format_files", "load_knowledge_base")
     workflow.add_edge("load_knowledge_base", "pylint_analysis")
-    workflow.add_edge("pylint_analysis", "completeness_analysis")
-    workflow.add_edge("completeness_analysis", "security_analysis")
-    workflow.add_edge("security_analysis", "standards_analysis")
+    workflow.add_conditional_edges("pylint_analysis", _route_to_analyses, ["completeness_analysis", "security_analysis", "standards_analysis"])
+    workflow.add_edge("completeness_analysis", "calculate_scores")
+    workflow.add_edge("security_analysis", "calculate_scores")
     workflow.add_edge("standards_analysis", "calculate_scores")
     workflow.add_edge("calculate_scores", "store_results")
     workflow.add_edge("store_results", "finalize_review")
@@ -429,5 +415,5 @@ def build_reviewer_graph():
     # Compile workflow with memory checkpointing
     compiled_workflow = workflow.compile(checkpointer=MemorySaver())
 
-    logger.info("Simplified LangGraph reviewer workflow created with 9 nodes")
+    logger.info("Simplified LangGraph reviewer workflow created with 9 nodes and parallel analyses")
     return compiled_workflow

@@ -1,14 +1,23 @@
 You are an expert software architect tasked with creating a comprehensive deployment document from a JIRA issue and its approved subtasks. The document must include:
 
 - **Dependency Analysis**: Analyze subtask relationships, including execution order (list of subtask IDs in order), dependencies (dict of subtask ID to list of prerequisite IDs), parallel groups (list of lists of parallelizable subtask IDs), and critical path (list of subtask IDs on the longest path).
-- **File Structure**: Predict the complete folder structure (nested dict), list of files (each with filename, type, purpose), and file types (list of unique types like "python", "json").
-- **Technical Specifications**: For each predicted file, provide detailed specs including required imports, classes/functions, data structures, logic flows, error handling, and connections to other files/subtasks.
+- **File Structure**: Carefully go through each subtask and the issue description to determine a suitable, complete file structure for the entire project. Predict the full folder structure (nested dict representing directories and files), a list of all necessary files (each with filename, type, purpose - ensure this covers every file needed for the project based on subtasks), and file types (list of unique types like "python", "json"). The LLM must decide on all files required to implement the subtasks fully; do not omit any files that would be essential for the project's functionality, such as source code, configs, tests, docs, or deployment files. Base the structure on best practices for the project type derived from the input.
+
+- **Technical Specifications**: For each predicted file in the file_structure, provide detailed specs including required imports, classes/functions, data structures, logic flows, error handling, and connections to other files/subtasks.
 - **Deployment Instructions**: Step-by-step deployment guide, including setup, build, run commands, environment vars, and testing.
 
 Input:
 - Issue Summary: {{{summary}}}
 - Issue Description: {{{description}}}
 - Approved Subtasks: {{{subtasks_text}}}
+
+CRITICAL REQUIREMENTS:
+1. Output ONLY a single, complete, valid JSON object
+2. Do NOT truncate or abbreviate ANY section
+3. ALL SIX top-level fields are MANDATORY: metadata, project_overview, implementation_plan, file_structure, technical_specifications, deployment_instructions
+4. Ensure proper JSON syntax with balanced braces and brackets
+5. Do NOT add any text before or after the JSON object
+6. If the project is backend-based, implement only in Python. If frontend-based, use HTML, CSS, JS if possible and sufficient; otherwise use React if possible and the complexity warrants it. If full-stack, combine backend (Python) and frontend appropriately if possible.
 
 Output a SINGLE JSON object with this exact structure (no extra text or markdown):
 
@@ -56,4 +65,6 @@ Output a SINGLE JSON object with this exact structure (no extra text or markdown
   }
 }
 
-Ensure the document is comprehensive, connected, and covers all subtasks/description.
+Ensure the document is comprehensive, connected, and covers all subtasks/description. The JSON must be complete and valid - no truncation allowed.
+
+REMEMBER: Output ONLY the JSON object above with real content based on the input. No extra text before or after.

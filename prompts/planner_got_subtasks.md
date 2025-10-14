@@ -1,4 +1,4 @@
-Analyze the JIRA issue and generate **exactly 10 subtasks** using Graph of Thoughts methodology.
+Analyze the JIRA issue and generate **exactly 6 subtasks** using Graph of Thoughts methodology.
 
 **Issue Key:** {{{issue_key}}}
 
@@ -7,7 +7,7 @@ Analyze the JIRA issue and generate **exactly 10 subtasks** using Graph of Thoug
 **Description:** {{{description}}}
 
 **Instructions:**
-Break down the issue into 10 granular, actionable subtasks that:
+Break down the issue into 6 granular, actionable subtasks that:
 1. Are immediately executable with clear outcomes
 2. Have logical dependencies (each step builds on previous ones)
 3. Cover all aspects of the issue description
@@ -23,7 +23,7 @@ Break down the issue into 10 granular, actionable subtasks that:
 - 5: Optional/Enhancement
 
 **Output Format:**
-Generate ONLY a valid JSON array with exactly 10 subtasks. No markdown, no explanations, just the JSON:
+Generate ONLY a valid JSON array with exactly 6 subtasks. No markdown, no explanations, just the JSON:
 
 [
   {
@@ -42,4 +42,4 @@ Generate ONLY a valid JSON array with exactly 10 subtasks. No markdown, no expla
   }
 ]
 
-Ensure all 10 subtasks collectively cover the complete issue description.
+Ensure all 6 subtasks collectively cover the complete issue description.

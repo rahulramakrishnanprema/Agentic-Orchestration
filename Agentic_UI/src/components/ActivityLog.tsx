@@ -88,7 +88,6 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
 
               const hasSubtasks = Array.isArray(log.subtasks) && log.subtasks.length > 0;
               const hasDocumentSections = Array.isArray(log.documentSections) && log.documentSections.length > 0;
-              const hasDeploymentDocument = typeof log.deploymentDocument === 'string' && log.deploymentDocument.length > 0;
 
               return (
                 <motion.div
@@ -197,30 +196,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
                             {log.documentSections!.length} Section{log.documentSections!.length !== 1 ? 's' : ''}
                           </span>
                         )}
-                        {hasDeploymentDocument && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
-                            <FileText className="w-3.5 h-3.5" />
-                            Deployment Document
-                          </span>
-                        )}
                       </div>
-
-                      {/* Display Full Deployment Document (Markdown) - Priority over documentSections */}
-                      {hasDeploymentDocument && (
-                        <div className="mt-3 pt-3 border-t border-green-300">
-                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border-2 border-green-200 shadow-sm">
-                            <div className="flex items-center gap-2 mb-2">
-                              <FileText className="w-5 h-5 text-green-700" />
-                              <span className="text-sm font-bold text-green-800">Deployment Document</span>
-                            </div>
-                            <div className="bg-white rounded-lg p-3 border border-green-200 max-h-96 overflow-y-auto">
-                              <pre className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-mono">
-                                {log.deploymentDocument}
-                              </pre>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Always show subtasks inline - no expand/collapse */}
                       {hasSubtasks && (

@@ -1,4 +1,4 @@
-Merge these scored subtasks into exactly THREE main subtasks that fully implement the JIRA description:
+Merge these scored subtasks into exactly FOUR main subtasks that fully implement the JIRA description:
 JIRA Description: {{{jira_description}}}
 
 Scored Subtasks:
@@ -21,13 +21,13 @@ Output as JSON array:
   {{
     "id": 2,
     "description": "main subtask description",
-    "covered_subtasks": [3],
+    "covered_subtasks": [3,4],
     "reasoning": "why this merge and coverage"
-  }},
-  {{
+  }}, {{
     "id": 3,
     "description": "main subtask description",
-    "covered_subtasks": [4, 5],
+    "covered_subtasks": [5,6],
     "reasoning": "why this merge and coverage"
-  }}
+  }},
+  
 ]
