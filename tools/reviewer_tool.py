@@ -123,8 +123,8 @@ def _initialize_mongodb():
 
     try:
         connection_string = config.MONGODB_CONNECTION_STRING
-        database_name = config.MONGODB_DATABASE
-        collection_name = config.MONGODB_COLLECTION
+        database_name = config.MONGODB_PERFORMANCE_DATABASE
+        collection_name = config.MONGODB_REVIEWER_COLLECTION
 
         mongo_client = MongoClient(
             connection_string,
@@ -140,13 +140,14 @@ def _initialize_mongodb():
         mongo_collection = mongo_db[collection_name]
 
         try:
-            mongo_collection.create_index("jira_task")
+            mongo_collection.create_index("issue_key")
             mongo_collection.create_index("date")
-            mongo_collection.create_index("overall_score")
+            mongo_collection.create_index("timestamp")
+            mongo_collection.create_index([("approved", 1), ("date", -1)])
         except Exception as e:
             logger.warning(f"Could not create MongoDB indexes: {e}")
 
-        logger.info(f"MongoDB ready - Collection: {collection_name}")
+        logger.info(f"MongoDB ready - Database: {database_name}, Collection: {collection_name}")
     except Exception as e:
         logger.error(f"MongoDB initialization failed: {e}")
         mongo_client = None
@@ -475,20 +476,29 @@ def calculate_review_scores(completeness_score: float, security_score: float, st
 @tool
 def store_review_in_mongodb(issue_key: str, issues: List[str], completeness_score: float,
                             security_score: float, standards_score: float, overall_score: float,
-                            iteration: int, thread_id: str, tokens_used: int = 0) -> Dict[str, Any]:
+                            approved: bool, iteration: int, thread_id: str, tokens_used: int = 0,
+                            files_reviewed: int = 0, processing_time: float = 0.0,
+                            knowledge_base_used: bool = True, pylint_score: float = 0.0,
+                            pylint_files_analyzed: int = 0) -> Dict[str, Any]:
     """
-    Store comprehensive review data in MongoDB.
+    Store comprehensive review data in MongoDB with all required fields.
 
     Args:
-        issue_key: Jira issue key
-        issues: List of all identified issues
+        issue_key: Jira issue identifier
+        issues: Complete list of ALL mistakes/feedback
         completeness_score: Completeness analysis score
         security_score: Security analysis score
         standards_score: Standards analysis score
         overall_score: Calculated overall score
+        approved: Whether code was approved
         iteration: Review iteration number
         thread_id: Thread identifier
-        tokens_used: Tokens used in review
+        tokens_used: Token consumption
+        files_reviewed: Number of files reviewed
+        processing_time: How long the review took
+        knowledge_base_used: Whether standards were consulted
+        pylint_score: Pylint score if Python files analyzed
+        pylint_files_analyzed: Number of Python files analyzed
     """
     try:
         with stats_lock:
@@ -498,42 +508,65 @@ def store_review_in_mongodb(issue_key: str, issues: List[str], completeness_scor
             return {"success": False, "error": "MongoDB not available"}
 
         with mongodb_lock:
-            agent_id = "001" if iteration == 1 else "003"
             local_time = datetime.now()
-            # Create review document
+
+            # Categorize issues by type
+            feedback_breakdown = {
+                "completeness": [],
+                "security": [],
+                "standards": []
+            }
+
+            # Simple categorization based on keywords (can be enhanced with ML)
+            for issue in issues:
+                issue_lower = issue.lower()
+                if any(keyword in issue_lower for keyword in ['incomplete', 'missing', 'requirement', 'feature']):
+                    feedback_breakdown["completeness"].append(issue)
+                elif any(keyword in issue_lower for keyword in ['security', 'vulnerability', 'injection', 'authentication']):
+                    feedback_breakdown["security"].append(issue)
+                else:
+                    feedback_breakdown["standards"].append(issue)
+
+            # Create review document with ALL required fields
             review_document = {
-                "agent_id": agent_id,
-                "date": local_time,
-                "jira_task": issue_key,
-                "iteration": iteration,
-                "thread_id": thread_id,
-                "llm": getattr(config, 'ASSEMBLER_LLM_MODEL', 'unknown'),
-                "model_temperature": 0.1,
-                "overall_score": round(overall_score, 1),
-                "total_mistakes": len(issues),
-                "all_mistake_notes": issues,
-                "review_timestamp": local_time.isoformat(),
-                "scores_breakdown": {
+                "agent_type": "reviewer",
+                "issue_key": issue_key,
+                "timestamp": local_time,
+                "date": local_time.date().isoformat(),
+                "scores": {
+                    "overall": round(overall_score, 1),
                     "completeness": round(completeness_score, 1),
                     "security": round(security_score, 1),
                     "standards": round(standards_score, 1),
-                    "overall": round(overall_score, 1)
+                    "pylint": round(pylint_score, 1) if pylint_score > 0 else None
                 },
-                "tokens_used": tokens_used
+                "approved": approved,
+                "issues": issues,
+                "feedback_breakdown": feedback_breakdown,
+                "files_reviewed": files_reviewed,
+                "tokens_used": tokens_used,
+                "iteration": iteration,
+                "llm_model": getattr(config, 'REVIEWER_LLM_MODEL', 'unknown'),
+                "processing_time": round(processing_time, 2),
+                "knowledge_base_used": knowledge_base_used,
+                "pylint_files_analyzed": pylint_files_analyzed,
+                "thread_id": thread_id
             }
 
             result = mongo_collection.insert_one(review_document)
 
+            logger.info(f"[{thread_id}] Stored review in MongoDB: {issue_key} - Approved: {approved}, Score: {overall_score}")
+
             return {
                 "success": True,
                 "document_id": str(result.inserted_id),
-                "agent_id": agent_id,
                 "timestamp": local_time.isoformat()
             }
 
     except Exception as e:
         with stats_lock:
             tool_stats['errors'] += 1
+        logger.error(f"Failed to store review in MongoDB: {e}")
         return {"success": False, "error": str(e)}
 
 

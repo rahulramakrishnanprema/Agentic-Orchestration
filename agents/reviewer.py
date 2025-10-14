@@ -18,10 +18,11 @@ from threading import Lock  # Added import to fix NameError
 # LangGraph imports
 from langgraph.checkpoint.memory import MemorySaver
 
+from services.llm_service import LLMService
 from tools.reviewer_tool import (
     format_files_for_review, get_knowledge_base_content, analyze_code_completeness,
     analyze_code_security, analyze_coding_standards, calculate_review_scores,
-    store_review_in_mongodb, analyze_python_code_with_pylint, get_reviewer_tools_stats
+    store_review_in_mongodb, analyze_python_code_with_pylint, get_reviewer_tools_stats, initialize_reviewer_tools
 )
 from tools.prompt_loader import PromptLoader
 
@@ -46,6 +47,11 @@ class SimplifiedReviewer:
         # Initialize prompt loader
         self.prompt_loader = PromptLoader("prompts")
 
+        # Initialize reviewer tools with MongoDB connection - THIS IS CRITICAL!
+        # Pass None for llm_instance since tools use call_llm directly
+        initialize_reviewer_tools(self.config, self.prompt_loader, None)
+        logger.info("Reviewer tools initialized with MongoDB connection")
+
         # Initialize simplified tools
         self.tools = [
             format_files_for_review,
@@ -59,7 +65,7 @@ class SimplifiedReviewer:
         ]
 
         # Initialize LangGraph workflow
-        self.workflow = build_reviewer_graph()  # CHANGED: Use imported builder instead of self._create_langgraph_workflow()
+        self.workflow = build_reviewer_graph()
 
         # Statistics tracking (simplified)
         self.workflow_stats = {

@@ -328,7 +328,12 @@ def _node_store_results(state: ReviewerState) -> ReviewerState:
         security_score = security_result.get('score', 70.0) if security_result and security_result.get('success') else 70.0
         standards_score = standards_result.get('score', 80.0) if standards_result and standards_result.get('success') else 80.0
 
-        # Call simplified MongoDB storage tool
+        # Get pylint results
+        pylint_result = state.get('pylint_result', {})
+        pylint_score = pylint_result.get('score', 0.0) if pylint_result and pylint_result.get('success') else 0.0
+        pylint_files_analyzed = pylint_result.get('files_analyzed', 0) if pylint_result else 0
+
+        # Call simplified MongoDB storage tool with ALL required parameters
         result = store_review_in_mongodb.invoke({
             "issue_key": state['issue_key'],
             "issues": state['all_issues'],
@@ -336,9 +341,13 @@ def _node_store_results(state: ReviewerState) -> ReviewerState:
             "security_score": security_score,
             "standards_score": standards_score,
             "overall_score": state['overall_score'],
+            "approved": state['approved'],
             "iteration": state['iteration'],
             "thread_id": state['thread_id'],
-            "tokens_used": state['tokens_used']
+            "tokens_used": state['tokens_used'],
+            "files_reviewed": len(state.get('files', {})),
+            "processing_time": state.get('processing_time', 0.0),
+            "knowledge_base_used": True,  # Always true since we load knowledge base
         })
 
         state['mongodb_stored'] = result.get('success', False)

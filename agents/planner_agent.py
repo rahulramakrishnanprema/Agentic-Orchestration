@@ -76,8 +76,8 @@ class PlannerAgent:
             return
         try:
             mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_DATABASE", "code_review")
-            coll_name = os.getenv("PLANNER_FEEDBACK", "planner-feedback")
+            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE", "aristotle_performance")
+            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE", "agent_performance")
             mongo_collection = mongo_client[db_name][coll_name]
             # Prepare subtasks list
             subtasks_list = []
@@ -99,16 +99,18 @@ class PlannerAgent:
                             break
                 subtasks_list.append(subtask)
             document = {
+                "agent_type": "planner",
                 "issue_key": issue_key,
                 "subtasks": subtasks_list,
-                "model_name": model,
+                "timestamp": datetime.now(),
+                "date": datetime.now().date().isoformat(),
+                "llm_model": model,
                 "creation_description": description,
-                "timestamp": datetime.now().isoformat(),
                 "overall_score": sum(s.get("score", 0) for s in subtasks_list) / len(subtasks_list) if subtasks_list and scores else None,
                 "tokens_used": tokens_used
             }
             result = mongo_collection.insert_one(document)
-            logger.info(f"[PLANNER] Stored feedback for {issue_key} in MongoDB: ID {result.inserted_id}")
+            logger.info(f"[PLANNER] Stored data for {issue_key} in MongoDB: ID {result.inserted_id}")
         except Exception as e:
             logger.error(f"[PLANNER] Failed to store feedback in MongoDB: {e}")
 

@@ -74,14 +74,17 @@ class AssemblerAgent:
 
         try:
             mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_DATABASE", "code_review")
-            coll_name = os.getenv("ASSEMBLER_FEEDBACK", "assembler-documents")
+            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE", "aristotle_performance")
+            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE", "agent_performance")
             mongo_collection = mongo_client[db_name][coll_name]
 
             document = {
+                "agent_type": "assembler",
                 "issue_key": issue_key,
                 "deployment_document": deployment_doc,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(),
+                "date": datetime.now().date().isoformat(),
+                "llm_model": os.getenv("ASSEMBLER_LLM_MODEL", "unknown"),
                 "tokens_used": tokens_used
             }
 

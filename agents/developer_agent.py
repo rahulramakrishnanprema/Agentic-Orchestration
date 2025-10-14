@@ -66,12 +66,12 @@ class DeveloperAgent:
                 return
 
             self.mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_COLLECTION")
-            coll_name = os.getenv("DEVELOPER_AGENT_FEEDBACK")
+            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE", "aristotle_performance")
+            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE", "agent_performance")
 
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
-            logger.info(f"Developer MongoDB ready - Collection: {coll_name}")
+            logger.info(f"Developer MongoDB ready - Database: {db_name}, Collection: {coll_name}")
         except Exception as e:
             logger.error(f"Developer MongoDB init failed: {e}")
             self.mongo_collection = None
@@ -87,21 +87,23 @@ class DeveloperAgent:
 
         try:
             mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_COLLECTION")
-            coll_name = os.getenv("DEVELOPER_AGENT_FEEDBACK")
+            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE", "aristotle_performance")
+            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE", "agent_performance")
             mongo_collection = mongo_client[db_name][coll_name]
 
             document = {
+                "agent_type": "developer",
                 "issue_key": issue_key,
-                "timestamp": datetime.now().isoformat(),
-                "tokens_used": tokens_used
+                "timestamp": datetime.now(),
+                "date": datetime.now().date().isoformat(),
+                "tokens_used": tokens_used,
+                "llm_model": os.getenv("DEVELOPER_LLM_MODEL", "unknown")
             }
 
             result = mongo_collection.insert_one(document)
-            logger.info(f"[DEVELOPER] Stored feedback for {issue_key} in MongoDB: ID {result.inserted_id}")
-
+            logger.info(f"[DEVELOPER] Stored data for {issue_key} in MongoDB: ID {result.inserted_id}")
         except Exception as e:
-            logger.error(f"[DEVELOPER] Failed to store feedback in MongoDB: {e}")
+            logger.error(f"[DEVELOPER] Failed to store data in MongoDB: {e}")
 
     def generate_code(self, deployment_document: Dict[str, Any],
                       issue_data: Optional[Dict[str, Any]] = None, thread_id: Optional[str] = None,
