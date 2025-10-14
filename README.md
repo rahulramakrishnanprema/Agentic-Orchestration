@@ -1,323 +1,153 @@
-# Agent-Flow - AI-Powered Development System
+# Agent-Flow: AI-Powered Development Automation System
 
-An intelligent AI development system using LangChain, LangGraph, MongoDB, and React UI for automated code generation, review, and deployment workflows.
+An intelligent multi-agent system that automates software development workflows by orchestrating specialized AI agents for planning, development, code review, and quality assurance.
 
-## 🌟 Features
+## 🚀 Features
 
-- **Automated Code Generation**: AI-powered code generation from JIRA issues
-- **Multi-Agent System**: Planner, Developer, Reviewer, and Assembler agents
-- **Code Quality Analysis**: Integration with SonarQube and Pylint
-- **GitHub Integration**: Automatic PR creation and management
-- **MongoDB Tracking**: Performance metrics and analytics
-- **React UI**: Real-time monitoring and control dashboard
-- **HITL (Human-in-the-Loop)**: Manual validation for critical decisions
+- **Multi-Agent Architecture**: Specialized agents for different development tasks
+  - **Planner Agent**: Analyzes JIRA tickets and creates execution plans
+  - **Developer Agent**: Generates and modifies code based on requirements
+  - **Reviewer Agent**: Performs code quality, security, and standards analysis
+  - **Assembler Agent**: Coordinates workflow and generates deployment artifacts
+  - **SonarQube Agent**: Integrates with SonarQube for advanced code quality analysis
 
-## 📋 Table of Contents
+- **JIRA Integration**: Automatically fetches and processes JIRA tickets
+- **GitHub Integration**: Creates branches, commits code, and opens pull requests
+- **SonarQube Integration**: Comprehensive code quality and security scanning
+- **MongoDB Performance Tracking**: Monitors and stores agent performance metrics
+- **React UI**: Modern web interface for system monitoring and configuration
+- **Human-in-the-Loop (HITL)**: Interactive approval process for critical decisions
+- **Flexible LLM Support**: Works with any OpenAI-compatible API (OpenRouter, OpenAI, local models, etc.)
+- **Per-Agent LLM Configuration**: Use different models for different agents
 
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Local Development Setup](#local-development-setup)
-- [GCP Deployment](#gcp-deployment)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Troubleshooting](#troubleshooting)
+## 📋 Prerequisites
 
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     React UI (Port 5173)                │
-│              Real-time Monitoring & Control             │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│              Main API Server (Port 8080)                │
-│                   Router & Workflow                      │
-└─┬──────────┬──────────┬──────────┬──────────┬──────────┘
-  │          │          │          │          │
-┌─▼────┐ ┌──▼─────┐ ┌──▼──────┐ ┌─▼────────┐ ┌▼─────────┐
-│Planner│ │Developer│ │Reviewer │ │Assembler│ │SonarQube│
-│Agent  │ │Agent    │ │Agent    │ │Agent    │ │Review   │
-└───────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
-    │          │          │           │           │
-    └──────────┴──────────┴───────────┴───────────┘
-                     │
-        ┌────────────┴────────────┐
-        │                         │
-    ┌───▼────┐              ┌────▼─────┐
-    │MongoDB │              │  GitHub  │
-    │Atlas   │              │  & JIRA  │
-    └────────┘              └──────────┘
-```
-
-## 📦 Prerequisites
-
-### Local Development
-- Python 3.11 or higher
-- Node.js 18+ (for React UI)
+- Python 3.9 or higher
+- Node.js 18+ and npm (for the React UI)
 - MongoDB (local or Atlas)
-- Git
-- Docker & Docker Compose (optional)
+- GitHub Personal Access Token
+- JIRA account and API token
+- LLM API key (OpenRouter, OpenAI, or compatible service)
+- SonarQube account (optional, for code quality analysis)
 
-### GCP Deployment
-- Google Cloud SDK (gcloud)
-- Docker
-- GCP Project with billing enabled
-- MongoDB Atlas account (recommended for production)
-
-## 🚀 Local Development Setup
+## 🛠️ Installation
 
 ### 1. Clone the Repository
+
 ```bash
 git clone https://github.com/your-username/Agent-flow.git
 cd Agent-flow
 ```
 
 ### 2. Set Up Python Environment
+
 ```bash
 # Create virtual environment
-python -m venv .venv
+python -m venv venv
 
 # Activate virtual environment
 # On Windows:
-.venv\Scripts\activate
+venv\Scripts\activate
 # On Linux/Mac:
-source .venv/bin/activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment Variables
+### 3. Set Up React UI
+
 ```bash
-# Copy the example file
-cp .env.example .env
-
-# Edit .env with your credentials
-# Required: OPENROUTE_API_KEY, GITHUB_TOKEN, JIRA credentials, MongoDB connection string
+cd Agentic_UI
+npm install
+cd ..
 ```
 
-### 4. Start the Application
+### 4. Configure Environment Variables
+
+Copy the `.env.example` file to `.env` and fill in your credentials:
+
 ```bash
-# Start with Python
-python main.py
-
-# Or use Docker Compose (includes MongoDB)
-docker-compose up -d
+copy .env.example .env
 ```
 
-### 5. Access the Application
-- **API Server**: http://localhost:8080
-- **React UI**: http://localhost:5173
-- **Health Check**: http://localhost:8080/api/health
-
-## ☁️ GCP Deployment
-
-### Quick Start (Cloud Run - Recommended)
-
-#### Using Automated Script (Windows)
-```powershell
-# Set your GCP project ID
-$env:GCP_PROJECT_ID = "your-project-id"
-
-# Run deployment script
-.\deploy-gcp.ps1 -ProjectId "your-project-id" -DeploymentType CloudRun
-```
-
-#### Using Automated Script (Linux/Mac)
-```bash
-# Set your GCP project ID
-export GCP_PROJECT_ID="your-project-id"
-
-# Make script executable
-chmod +x deploy-gcp.sh
-
-# Run deployment script
-./deploy-gcp.sh
-```
-
-#### Manual Deployment Steps
-
-1. **Set up GCP Project**
-```bash
-gcloud config set project YOUR_PROJECT_ID
-gcloud auth login
-```
-
-2. **Enable Required APIs**
-```bash
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable run.googleapis.com
-gcloud services enable secretmanager.googleapis.com
-```
-
-3. **Create Secrets from .env**
-```bash
-# Example for creating secrets
-gcloud secrets create OPENROUTE_API_KEY --data-file=<(echo -n "your_key")
-gcloud secrets create GITHUB_TOKEN --data-file=<(echo -n "your_token")
-gcloud secrets create JIRA_TOKEN --data-file=<(echo -n "your_token")
-gcloud secrets create MONGODB_CONNECTION_STRING --data-file=<(echo -n "your_uri")
-# ... repeat for all secrets
-```
-
-4. **Deploy to Cloud Run**
-```bash
-# Build and deploy using Cloud Build
-gcloud builds submit --config cloudbuild.yaml
-
-# Or deploy manually
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/agent-flow
-gcloud run deploy agent-flow \
-  --image gcr.io/YOUR_PROJECT_ID/agent-flow \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --port 8080 \
-  --memory 2Gi \
-  --cpu 2
-```
-
-### Alternative GCP Deployment Options
-
-#### Google Kubernetes Engine (GKE)
-```bash
-# Create cluster
-gcloud container clusters create agent-flow-cluster \
-  --num-nodes=3 \
-  --machine-type=e2-standard-4 \
-  --region=us-central1
-
-# Deploy
-kubectl apply -f k8s/
-```
-
-#### App Engine
-```bash
-gcloud app deploy app.yaml
-```
-
-#### Compute Engine VM
-```bash
-gcloud compute instances create agent-flow-vm \
-  --machine-type=e2-standard-4 \
-  --image-family=ubuntu-2204-lts \
-  --image-project=ubuntu-os-cloud \
-  --zone=us-central1-a
-```
-
-📚 **See [GCP_DEPLOYMENT.md](./GCP_DEPLOYMENT.md) for detailed deployment instructions and troubleshooting.**
+Edit the `.env` file with your actual values (see Configuration section below).
 
 ## ⚙️ Configuration
 
-All configuration is managed through environment variables in the `.env` file:
+All configuration is managed through environment variables in the `.env` file. See `.env.example` for a complete template.
 
 ### Required Configuration
 
-```env
-# LLM Configuration (Required)
-OPENROUTE_API_KEY=your_api_key
-LLM_MODEL=deepseek/deepseek-v3:free
+#### LLM Configuration
+- `LLM_API_KEY`: Your LLM API key (e.g., OpenRouter, OpenAI)
+- `LLM_API_URL`: API endpoint URL
+- `PLANNER_LLM_MODEL`: Model for planning tasks
+- `ASSEMBLER_LLM_MODEL`: Model for assembly tasks
+- `DEVELOPER_LLM_MODEL`: Model for code generation
+- `REVIEWER_LLM_MODEL`: Model for code review
 
-# GitHub Configuration (Required)
-GITHUB_TOKEN=your_github_token
-GITHUB_REPO_OWNER=your_username
-GITHUB_REPO_NAME=your_repo
+#### GitHub Configuration
+- `GITHUB_TOKEN`: GitHub Personal Access Token (with repo permissions)
+- `GITHUB_REPO_OWNER`: Repository owner username
+- `GITHUB_REPO_NAME`: Repository name
 
-# JIRA Configuration (Required)
-JIRA_SERVER=https://your-domain.atlassian.net
-JIRA_EMAIL=your_email@example.com
-JIRA_TOKEN=your_jira_token
-PROJECT_KEY=YOUR_KEY
+#### JIRA Configuration
+- `JIRA_SERVER`: JIRA server URL (e.g., https://your-domain.atlassian.net)
+- `JIRA_EMAIL`: Your JIRA email
+- `JIRA_TOKEN`: JIRA API token
+- `PROJECT_KEY`: JIRA project key
 
-# MongoDB Configuration (Required)
-MONGODB_CONNECTION_STRING=mongodb+srv://user:pass@cluster.mongodb.net/
-```
+#### MongoDB Configuration
+- `MONGODB_CONNECTION_STRING`: MongoDB connection string
+- `MONGODB_PERFORMANCE_DATABASE`: Database name for performance tracking
+- `MONGODB_AGENT_PERFORMANCE`: Collection for agent metrics
+- `MONGODB_COLLECTION_MATRIX`: Collection for workflow data
+- `MONGODB_REVIEWER_COLLECTION`: Collection for review data
 
 ### Optional Configuration
 
-```env
-# UI Settings
-UI_HOST=localhost
-UI_PORT=8080
-REACT_DEV_PORT=5173
+#### SonarQube (for advanced code quality analysis)
+- `SONAR_TOKEN`: SonarQube authentication token
+- `SONAR_ORG`: SonarQube organization
+- `SONAR_PROJECT_KEY`: Project key in SonarQube
+- `SONAR_HOST_URL`: SonarQube server URL
 
-# Review Thresholds
-REVIEW_THRESHOLD=70
-GOT_SCORE_THRESHOLD=7.0
-MAX_REBUILD_ATTEMPTS=3
+#### System Settings
+- `MAX_REBUILD_ATTEMPTS`: Maximum code rebuild attempts (default: 3)
+- `REVIEW_THRESHOLD`: Code quality threshold (default: 0.7)
+- `GOT_SCORE_THRESHOLD`: Planning score threshold (default: 0.8)
+- `HITL_TIMEOUT_SECONDS`: Timeout for human approval (default: 300)
 
-# SonarQube (Optional)
-SONAR_TOKEN=your_token
-SONAR_ORG=your_org
-SONAR_PROJECT_KEY=your_key
-```
+## 🚀 Usage
 
-## 📖 Usage
+### Start the System
 
-### Starting a Workflow
-
-1. **Via React UI** (Recommended)
-   - Open http://localhost:5173
-   - Click "Start Automation"
-   - Select JIRA issue or enter task details
-   - Monitor progress in real-time
-
-2. **Via API**
 ```bash
-curl -X POST http://localhost:8080/api/start-automation \
-  -H "Content-Type: application/json" \
-  -d '{"issue_key": "IPM-123"}'
+python main.py
 ```
 
-### Monitoring
+This will:
+1. Initialize the router and agent system
+2. Start the React UI development server
+3. Automatically open the UI in your default browser (http://localhost:5173)
 
-- **System Status**: GET `/api/status`
-- **Statistics**: GET `/api/stats`
-- **Activity Log**: GET `/api/activity`
-- **Health Check**: GET `/api/health`
+### Using the Web Interface
 
-## 🔌 API Documentation
+1. **Configure Settings**: Go to the Settings page to verify/update your configuration
+2. **Start Workflow**: Click the "Start Automation" button on the home page
+3. **Monitor Progress**: Watch real-time logs and status updates
+4. **HITL Approval**: Review and approve/reject agent actions when prompted
 
-### Health Check
-```bash
-GET /api/health
-Response: {"status": "healthy", "timestamp": "..."}
-```
+### Manual Workflow Trigger
 
-### Start Automation
-```bash
-POST /api/start-automation
-Body: {"issue_key": "IPM-123"}
-Response: {"success": true, "message": "..."}
-```
-
-### Get System Status
-```bash
-GET /api/status
-Response: {
-  "status": "running",
-  "current_task": "...",
-  "agents_active": [...]
-}
-```
-
-### Get Statistics
-```bash
-GET /api/stats
-Response: {
-  "tasks_completed": 10,
-  "success_rate": 85.5,
-  "tokens_used": 125000
-}
-```
-
-### Performance Data
-```bash
-GET /api/performance-data
-Response: {"performance_data": [...]}
-```
+The system automatically:
+1. Fetches "To Do" issues from JIRA
+2. Creates execution plans for each issue
+3. Generates code based on requirements
+4. Reviews code for quality and security
+5. Creates GitHub branches and pull requests
+6. Runs SonarQube analysis (if configured)
 
 ## 📁 Project Structure
 
@@ -327,120 +157,131 @@ Agent-flow/
 │   ├── planner_agent.py
 │   ├── developer_agent.py
 │   ├── reviewer.py
+│   ├── assembler_agent.py
 │   └── sonarcube_review.py
-├── config/              # Configuration management
-│   ├── settings.py      # Centralized config
-│   └── logging_config.py
-├── core/                # Core system components
-│   ├── graph.py
-│   ├── router.py
-│   └── hitl.py
-├── tools/               # Agent tools
-│   ├── planner_tools.py
-│   ├── developer_tool.py
-│   ├── reviewer_tool.py
-│   └── jira_client.py
-├── services/            # External services
+├── core/               # Core system components
+│   ├── graph.py        # Workflow orchestration
+│   ├── router.py       # System router and initialization
+│   ├── hitl.py         # Human-in-the-loop management
+│   └── logging.py      # Logging utilities
+├── graph/              # Agent-specific graphs
+├── services/           # External service integrations
+│   ├── llm_service.py
 │   ├── github_service.py
 │   └── performance_tracker.py
-├── ui/                  # Backend UI handler
-│   └── ui.py
-├── Agentic_UI/          # React frontend
-├── prompts/             # AI prompts
-├── standards/           # Coding standards
-├── k8s/                 # Kubernetes configs
-├── main.py             # Application entry point
-├── Dockerfile          # Docker configuration
-├── docker-compose.yml  # Docker Compose setup
-├── cloudbuild.yaml     # GCP Cloud Build config
-├── app.yaml            # App Engine config
-├── deploy-gcp.sh       # GCP deployment script (Linux/Mac)
-├── deploy-gcp.ps1      # GCP deployment script (Windows)
-└── requirements.txt    # Python dependencies
+├── tools/              # Agent tools
+│   ├── jira_client.py
+│   ├── planner_tools.py
+│   ├── developer_tool.py
+│   └── assembler_tool.py
+├── config/             # Configuration management
+├── prompts/            # LLM prompts
+├── standards/          # Coding standards and guidelines
+├── Agentic_UI/         # React web interface
+├── k8s/                # Kubernetes deployment files
+└── main.py             # Application entry point
 ```
+
+## 🐳 Docker Deployment
+
+### Using Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+### Building Docker Image
+
+```bash
+docker build -t agent-flow:latest .
+```
+
+## ☁️ Cloud Deployment
+
+### Google Cloud Platform (GCP)
+
+See [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) for detailed instructions.
+
+Quick deployment:
+```bash
+./deploy-gcp.sh
+```
+
+### Kubernetes
+
+```bash
+# Create namespace and secrets
+kubectl apply -f k8s/00-namespace-secrets.yaml
+
+# Update secrets with your values
+kubectl edit secret agent-flow-secrets -n agent-flow
+
+# Deploy application
+kubectl apply -f k8s/01-deployment.yaml
+```
+
+## 📊 Performance Monitoring
+
+The system automatically tracks:
+- Agent execution times
+- Token usage per agent
+- Success/failure rates
+- LLM API call statistics
+- Code quality metrics
+
+All metrics are stored in MongoDB and can be visualized through the UI or external tools like Grafana.
 
 ## 🔧 Troubleshooting
 
 ### Common Issues
 
-**Port Already in Use**
+**1. "Failed to initialize router system"**
+- Check that all required environment variables are set
+- Verify GitHub token has proper permissions
+- Ensure JIRA credentials are correct
+
+**2. "LLM API Error"**
+- Verify API key is valid
+- Check API URL is correct
+- Ensure sufficient API credits
+
+**3. "MongoDB Connection Error"**
+- Verify connection string format
+- Check network connectivity
+- Ensure MongoDB is running
+
+**4. UI Not Starting**
+- Check if port 5173 is already in use
+- Verify Node.js and npm are installed
+- Run `npm install` in the Agentic_UI directory
+
+### Debug Mode
+
+Enable debug logging:
 ```bash
-# Windows
-netstat -ano | findstr :8080
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -i :8080
-kill -9 <PID>
+# In .env file
+DEBUG=true
+LOG_LEVEL=DEBUG
 ```
-
-**MongoDB Connection Error**
-- Verify MongoDB is running
-- Check connection string in `.env`
-- For Atlas: Ensure IP whitelist is configured
-
-**LLM API Errors**
-- Verify API key in `.env`
-- Check rate limits
-- Ensure model name is correct
-
-**GCP Deployment Issues**
-- Verify all secrets are created
-- Check service logs: `gcloud run logs read agent-flow`
-- Ensure billing is enabled
-- Verify API quotas
-
-### Getting Help
-
-- **Logs**: Check `logs/` directory
-- **Health Check**: `curl http://localhost:8080/api/health`
-- **Docker Logs**: `docker-compose logs -f`
-- **GCP Logs**: `gcloud logging read`
-
-## 🔐 Security Best Practices
-
-1. **Never commit `.env` file** - Use `.env.example` as template
-2. **Use Secret Manager** - For production deployments (GCP Secret Manager, etc.)
-3. **Rotate credentials** - Regularly update API keys and tokens
-4. **Limit permissions** - Use minimal required permissions for service accounts
-5. **HTTPS only** - Always use HTTPS in production
-6. **Regular updates** - Keep dependencies updated
-
-## 📊 Monitoring & Performance
-
-- **MongoDB Performance Tracking**: Real-time metrics stored in MongoDB
-- **Cloud Monitoring**: GCP native monitoring and alerting
-- **Custom Dashboards**: React UI with live performance data
-- **Log Aggregation**: Centralized logging with Cloud Logging
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
+## 📝 License
 
-[Add your license information here]
+[Add your license here]
 
 ## 🙏 Acknowledgments
 
-- LangChain & LangGraph for agent orchestration
-- OpenRouter for LLM API access
-- MongoDB Atlas for database hosting
-- Google Cloud Platform for infrastructure
+- Built with [LangGraph](https://github.com/langchain-ai/langgraph)
+- UI built with React + TypeScript + Vite
+- Uses OpenAI-compatible APIs for LLM integration
 
-## 📞 Support
+## 📧 Support
 
-For issues and questions:
-- GitHub Issues: [Your repo issues URL]
-- Documentation: See `GCP_DEPLOYMENT.md` for deployment details
-- Configuration: See `CONFIG_REFACTORING_SUMMARY.md` for config details
+For issues and questions, please open an issue on GitHub.
 
 ---
 
-**Version**: 3.0.0  
-**Last Updated**: October 10, 2025  
-**Status**: Production Ready ✅
+**Note**: This system is designed for development automation. Always review generated code before merging to production.
