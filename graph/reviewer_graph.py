@@ -8,6 +8,7 @@ from tools.reviewer_tool import (
     store_review_in_mongodb, analyze_python_code_with_pylint
 )
 from ui.ui import workflow_status, workflow_status_lock
+from services.performance_tracker import performance_tracker  # Add performance tracker import
 import logging
 from threading import Lock
 import queue  # NEW: Add import for queue
@@ -350,12 +351,52 @@ def _node_store_results(state: ReviewerState) -> ReviewerState:
             "knowledge_base_used": True,  # Always true since we load knowledge base
         })
 
-        state['mongodb_stored'] = result.get('success', False)
+        # Store in reviewer-specific collection (existing behavior)
+        reviewer_stored = result.get('success', False)
 
-        if result.get('success', False):
-            logger.info(f"[{state['thread_id']}] MongoDB storage successful: {result.get('document_id')}")
+        if reviewer_stored:
+            logger.info(f"[{state['thread_id']}] Reviewer-specific MongoDB storage successful: {result.get('document_id')}")
         else:
-            logger.warning(f"[{state['thread_id']}] MongoDB storage failed: {result.get('error')}")
+            logger.warning(f"[{state['thread_id']}] Reviewer-specific MongoDB storage failed: {result.get('error')}")
+
+        # ALSO store in shared performance tracker (like other agents do)
+        try:
+            if performance_tracker is not None and performance_tracker.collection is not None:
+                import os
+                agent_metrics = {
+                    "ReviewerAgent": {
+                        "Task_completed": 1,
+                        "LLM_model_used": os.getenv("REVIEWER_LLM_MODEL", "unknown"),
+                        "tokens_used": state['tokens_used']
+                    }
+                }
+
+                pr_data = {
+                    "issue_key": state['issue_key'],
+                    "pr_url": "",  # Reviewer doesn't create PRs
+                    "files_count": len(state.get('files', {}))
+                }
+
+                tracker_success = performance_tracker.update_daily_metrics_after_pr(
+                    pr_data=pr_data,
+                    agent_metrics=agent_metrics,
+                    sonarqube_score=state['overall_score'],
+                    success=state['approved'],
+                    thread_id=state['thread_id']
+                )
+
+                if tracker_success:
+                    logger.info(f"[{state['thread_id']}] Performance tracker MongoDB storage successful")
+                    state['mongodb_stored'] = True
+                else:
+                    logger.warning(f"[{state['thread_id']}] Performance tracker MongoDB storage failed")
+                    state['mongodb_stored'] = reviewer_stored  # At least reviewer-specific worked
+            else:
+                logger.warning(f"[{state['thread_id']}] Performance tracker not available")
+                state['mongodb_stored'] = reviewer_stored
+        except Exception as tracker_error:
+            logger.error(f"[{state['thread_id']}] Performance tracker storage error: {tracker_error}")
+            state['mongodb_stored'] = reviewer_stored  # At least reviewer-specific worked
 
         return state
 
