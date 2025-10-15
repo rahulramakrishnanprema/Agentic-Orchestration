@@ -86,7 +86,7 @@ def initialize_reviewer_tools(app_config, app_prompt_loader, app_llm):
     if getattr(config, 'MONGODB_ENABLED', True):
         _initialize_mongodb()
 
-    logger.info("Simplified reviewer tools initialized successfully")
+    logger.debug("Simplified reviewer tools initialized successfully")
 
 
 def _load_knowledge_base():
@@ -108,7 +108,7 @@ def _load_knowledge_base():
                         content = file.read()
                         key = filename[:-3]
                         knowledge_base[key] = content
-                        logger.info(f"Loaded knowledge base: {filename}")
+                        logger.debug(f"Loaded knowledge base: {filename}")
                 except Exception as e:
                     logger.warning(f"Failed to load {filename}: {e}")
 
@@ -134,7 +134,7 @@ def _initialize_mongodb():
         )
 
         server_info = mongo_client.server_info()
-        logger.info(f"MongoDB connected - Version: {server_info.get('version', 'Unknown')}")
+        logger.debug(f"MongoDB connected - Version: {server_info.get('version', 'Unknown')}")
 
         mongo_db = mongo_client[database_name]
         mongo_collection = mongo_db[collection_name]
@@ -147,7 +147,7 @@ def _initialize_mongodb():
         except Exception as e:
             logger.warning(f"Could not create MongoDB indexes: {e}")
 
-        logger.info(f"MongoDB ready - Database: {database_name}, Collection: {collection_name}")
+        logger.debug(f"MongoDB ready - Database: {database_name}, Collection: {collection_name}")
     except Exception as e:
         logger.error(f"MongoDB initialization failed: {e}")
         mongo_client = None

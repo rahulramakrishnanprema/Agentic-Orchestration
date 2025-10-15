@@ -44,7 +44,7 @@ class CorePlannerAgent:
 
         # Build the graph
         self.graph = self._build_graph()
-        logger.info("Core Planner Agent initialized (modular version)")
+        logger.debug("Core Planner Agent initialized (modular version)")
 
     def _build_graph(self):
         """Build the core planner LangGraph"""

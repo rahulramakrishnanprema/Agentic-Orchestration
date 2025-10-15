@@ -50,7 +50,7 @@ class CoreDeveloperAgent:
         from graph.developer_graph import build_developer_graph
         self.graph = build_developer_graph()
 
-        logger.info("Core Developer Agent initialized (modular version)")
+        logger.debug("Core Developer Agent initialized (modular version)")
 
     def develop(
         self,

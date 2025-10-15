@@ -53,7 +53,7 @@ class PlannerAgent:
             perform_hitl_validation
         ]
 
-        logger.info("Planner Agent initialized (using modular architecture)")
+        logger.debug("Planner Agent initialized (using modular architecture)")
 
     @staticmethod
     def _store_to_mongodb(issue_key: str, subtasks: Dict, model: str, description: str,

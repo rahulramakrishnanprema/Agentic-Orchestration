@@ -162,7 +162,7 @@ class LangGraphRouter:
         global planner_agent, assembler_agent, developer_agent, reviewer_agent
 
         try:
-            log_activity("Initializing agents...")
+            logger.debug("Initializing agents...")
 
             prompt_loader = PromptLoader("prompts")
             initialize_planner_tools(config, prompt_loader)
@@ -170,16 +170,16 @@ class LangGraphRouter:
             initialize_developer_tools(config, prompt_loader)
 
             planner_agent = PlannerAgent(self.config)
-            log_activity("Planner Agent initialized")
+            logger.debug("Planner Agent initialized")
 
             assembler_agent = AssemblerAgent(self.config)
-            log_activity("Assembler Agent initialized")
+            logger.debug("Assembler Agent initialized")
 
             developer_agent = DeveloperAgent(self.config)
-            log_activity("Developer Agent initialized")
+            logger.debug("Developer Agent initialized")
 
             reviewer_agent = ReviewerAgent(self.config)
-            log_activity("Reviewer Agent initialized")
+            logger.debug("Reviewer Agent initialized")
 
             return True
 
@@ -192,40 +192,37 @@ class LangGraphRouter:
         global github_client
 
         if not GITHUB_AVAILABLE:
-            log_activity("GitHub library not available")
+            logger.debug("GitHub library not available")
             return False
 
         try:
             if not self.config.GITHUB_TOKEN:
-                log_activity("GitHub token not configured - skipping GitHub integration")
+                logger.debug("GitHub token not configured - skipping GitHub integration")
                 return False
 
             if not self.config.GITHUB_REPO_OWNER or not self.config.GITHUB_REPO_NAME:
-                log_activity("GitHub repository owner/name not configured")
+                logger.debug("GitHub repository owner/name not configured")
                 return False
 
             # Test token validity
-            log_activity(f"Testing GitHub token (starts with: {self.config.GITHUB_TOKEN[:10]}...)")
+            logger.debug(f"Testing GitHub token (starts with: {self.config.GITHUB_TOKEN[:10]}...)")
             github_client = Github(self.config.GITHUB_TOKEN)
 
             try:
                 user = github_client.get_user()
-                log_activity(f"✓ GitHub client initialized for user: {user.login}")
+                logger.debug(f"✓ GitHub client initialized for user: {user.login}")
 
                 # Test repository access
                 repo = github_client.get_repo(f"{self.config.GITHUB_REPO_OWNER}/{self.config.GITHUB_REPO_NAME}")
-                log_activity(f"✓ Repository access confirmed: {repo.full_name}")
+                logger.info(f"✓ GitHub connected: {repo.full_name}")
 
-                # Check token scopes and rate limit
+                # Check token scopes and rate limit (silently)
                 try:
                     rate_limit = github_client.get_rate_limit()
-                    # In PyGithub 2.7.0, rate_limit is a RateLimitOverview object
-                    # Access the core rate limit properly
                     core_rate = rate_limit.core
-                    log_activity(f"✓ GitHub API rate limit: {core_rate.remaining}/{core_rate.limit}")
+                    logger.debug(f"✓ GitHub API rate limit: {core_rate.remaining}/{core_rate.limit}")
                 except AttributeError:
-                    # Fallback if rate limit structure is different
-                    log_activity("✓ GitHub API connected (rate limit check unavailable)")
+                    logger.debug("✓ GitHub API connected (rate limit check unavailable)")
 
                 return True
             except GithubException as e:
@@ -249,7 +246,7 @@ class LangGraphRouter:
 
         try:
             sonarqube_agent = FixedSonarQube(self.config)
-            log_activity("SonarQube Agent initialized")
+            logger.debug("SonarQube Agent initialized")
             return True
         except Exception as error:
             log_activity(f"SonarQube initialization failed: {error}")
@@ -637,6 +634,14 @@ if __name__ == "__main__":
 # Export a function that creates the graph on-demand
 def create_graph():
     """Create and return the workflow graph for LangGraph Studio"""
+    global router_instance
+
+    # If router already initialized, reuse it
+    if router_instance is not None:
+        logger.debug("Reusing existing router instance for LangGraph Studio")
+        return router_instance.workflow
+
+    # Otherwise create new instance
     try:
         router = LangGraphRouter(config)
         logger.info("Graph created successfully for LangGraph Studio")
@@ -645,6 +650,5 @@ def create_graph():
         logger.error(f"Failed to create graph for LangGraph Studio: {e}")
         raise
 
-# Export the graph - Studio will call create_graph() when needed
-app_graph = create_graph()
-
+# Export the graph - lazily initialized
+app_graph = None  # Don't create immediately - wait for explicit initialization

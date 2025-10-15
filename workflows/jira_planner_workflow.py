@@ -38,7 +38,7 @@ class JiraPlannerWorkflow:
         self.mongo_collection = None
         self._initialize_mongodb()
 
-        logger.info("JIRA Planner Workflow initialized")
+        logger.debug("JIRA Planner Workflow initialized")
 
     def _initialize_mongodb(self):
         """Initialize MongoDB connection for JIRA feedback storage"""
@@ -55,7 +55,7 @@ class JiraPlannerWorkflow:
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
 
-            logger.info(f"JIRA Planner MongoDB ready - Database: {db_name}, Collection: {coll_name}")
+            logger.debug(f"JIRA Planner MongoDB ready - Database: {db_name}, Collection: {coll_name}")
         except Exception as e:
             logger.error(f"JIRA Planner MongoDB init failed: {e}")
             self.mongo_collection = None

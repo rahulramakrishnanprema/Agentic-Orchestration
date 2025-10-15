@@ -41,7 +41,7 @@ class AssemblerAgent:
         # Initialize LangGraph sub-graph
         self.graph = build_assembler_graph()
 
-        logger.info("Assembler Agent initialized")
+        logger.debug("Assembler Agent initialized")
 
     def _initialize_mongodb(self):
         """Initialize MongoDB connection"""
@@ -58,7 +58,7 @@ class AssemblerAgent:
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
 
-            logger.info(f"Assembler MongoDB ready - Collection: {coll_name}")
+            logger.debug(f"Assembler MongoDB ready - Collection: {coll_name}")
         except Exception as e:
             logger.error(f"Assembler MongoDB init failed: {e}")
             self.mongo_collection = None
@@ -149,4 +149,3 @@ class AssemblerAgent:
         except Exception as e:
             logger.error(f"[ASSEMBLER-{thread_id}] Document creation failed: {e}")
             return {"success": False, "error": str(e)}
-

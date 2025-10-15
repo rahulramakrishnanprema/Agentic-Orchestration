@@ -40,7 +40,7 @@ class CoreReviewerAgent:
         # Initialize reviewer tools with MongoDB connection
         from tools.reviewer_tool import initialize_reviewer_tools
         initialize_reviewer_tools(self.config, self.prompt_loader, None)
-        logger.info("Core Reviewer tools initialized")
+        logger.debug("Core Reviewer tools initialized")
 
         # Build the graph
         from graph.reviewer_graph import build_reviewer_graph
@@ -57,7 +57,7 @@ class CoreReviewerAgent:
             'average_score': 0.0
         }
 
-        logger.info("Core Reviewer Agent initialized (modular version)")
+        logger.debug("Core Reviewer Agent initialized (modular version)")
 
     def review(
         self,
@@ -233,4 +233,3 @@ class CoreReviewerAgent:
             'average_score': 0.0
         }
         logger.info("Core Reviewer stats reset")
-

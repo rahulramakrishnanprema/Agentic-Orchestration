@@ -41,7 +41,7 @@ class CoreAssemblerAgent:
 
         # Build the graph
         self.graph = self._build_graph()
-        logger.info("Core Assembler Agent initialized (modular version)")
+        logger.debug("Core Assembler Agent initialized (modular version)")
 
     def _build_graph(self):
         """Build the core assembler LangGraph"""
@@ -231,4 +231,3 @@ class CoreAssemblerAgent:
             }
 
         return assembler_node
-

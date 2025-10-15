@@ -39,7 +39,7 @@ class JiraDeveloperWorkflow:
         self.mongo_collection = None
         self._initialize_mongodb()
 
-        logger.info("JIRA Developer Workflow initialized")
+        logger.debug("JIRA Developer Workflow initialized")
 
     def _initialize_mongodb(self):
         """Initialize MongoDB connection for JIRA feedback storage"""
@@ -55,7 +55,7 @@ class JiraDeveloperWorkflow:
 
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
-            logger.info(f"JIRA Developer MongoDB ready - Database: {db_name}, Collection: {coll_name}")
+            logger.debug(f"JIRA Developer MongoDB ready - Database: {db_name}, Collection: {coll_name}")
         except Exception as e:
             logger.error(f"JIRA Developer MongoDB init failed: {e}")
             self.mongo_collection = None
@@ -271,4 +271,3 @@ class JiraDeveloperWorkflow:
                 "generated_files": generated_files,
                 "tokens_used": 0
             }
-

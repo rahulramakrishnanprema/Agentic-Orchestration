@@ -52,7 +52,7 @@ class FixedSonarQube:
             'average_score': 0.0
         }
 
-        logger.info("Fixed SonarQube Agent initialized")
+        logger.debug("Fixed SonarQube Agent initialized")
 
     def analyze_latest_pr(self, thread_id: Optional[str] = None) -> Dict[str, Any]:
         if not thread_id:

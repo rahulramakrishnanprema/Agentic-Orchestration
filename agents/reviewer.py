@@ -68,7 +68,7 @@ class SimplifiedReviewer:
         # Statistics tracking - delegate to core reviewer
         self.workflow_stats = self.core_reviewer.review_stats
 
-        logger.info("Simplified LangGraph Reviewer Agent initialized (using modular architecture)")
+        logger.debug("Simplified LangGraph Reviewer Agent initialized (using modular architecture)")
 
     def review_generated_code_with_langgraph(self, issue_key: str, files: Dict[str, str],
                                            file_types: List[str], project_description: str,
@@ -127,4 +127,3 @@ class SimplifiedReviewer:
     def get_reviewer_workflow_stats(self) -> Dict[str, Any]:
         """Get comprehensive reviewer workflow statistics."""
         return self.jira_workflow.get_workflow_stats()
-

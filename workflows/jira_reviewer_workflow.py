@@ -34,7 +34,7 @@ class JiraReviewerWorkflow:
         self.config = config
         self.core_reviewer = CoreReviewerAgent(config)
 
-        logger.info("JIRA Reviewer Workflow initialized")
+        logger.debug("JIRA Reviewer Workflow initialized")
 
     def _log_to_ui(self, issue_key: str, score: float, approved: bool, thread_id: str):
         """Log review results to UI"""
@@ -209,4 +209,3 @@ class JiraReviewerWorkflow:
                 "knowledge_base_integration"
             ]
         }
-

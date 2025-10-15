@@ -56,7 +56,7 @@ class DeveloperAgent:
         self.mongo_client = self.jira_workflow.mongo_client
         self.mongo_collection = self.jira_workflow.mongo_collection
 
-        logger.info("Developer Agent initialized (using modular architecture)")
+        logger.debug("Developer Agent initialized (using modular architecture)")
 
     def _initialize_mongodb(self):
         """Legacy method - now handled by JiraDeveloperWorkflow"""
@@ -139,5 +139,3 @@ class DeveloperAgent:
         except Exception as e:
             logger.error(f"[DEVELOPER-{thread_id}] Code generation failed: {e}")
             return {"success": False, "error": str(e)}
-
-
