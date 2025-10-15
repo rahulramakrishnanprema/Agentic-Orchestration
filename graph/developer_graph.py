@@ -151,9 +151,7 @@ def _update_memory_after_generation_node(state: DeveloperState) -> Dict[str, Any
     state["persistent_memory"] = global_project_memory
     state["memory_updated"] = True
 
-    # Store to MongoDB (call class method)
-    from agents.developer_agent import DeveloperAgent  # Moved import inside function
-    DeveloperAgent._store_to_mongodb(issue_key=issue_key, tokens_used=state["tokens_used"])
+    # MongoDB storage is now handled by JiraDeveloperWorkflow - removed duplicate call
 
     return state
 
@@ -220,11 +218,7 @@ def _update_memory_after_correction_node(state: DeveloperState) -> Dict[str, Any
     state["persistent_memory"] = global_project_memory
     state["memory_updated"] = True
 
-    from agents.developer_agent import DeveloperAgent  # Moved import inside function
-    DeveloperAgent._store_to_mongodb(
-        issue_key=state.get("issue_data", {}).get("key"),
-        tokens_used=state["tokens_used"]
-    )
+    # MongoDB storage is now handled by JiraDeveloperWorkflow - removed duplicate call
 
     return state
 
