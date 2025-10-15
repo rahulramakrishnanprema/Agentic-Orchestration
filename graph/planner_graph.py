@@ -79,6 +79,28 @@ def _decide_planning_method_node(state: PlannerState) -> Dict[str, Any]:
 
         logger.info(f"[PLANNER-{thread_id}] Decided on {method}: {reasoning}")
 
+        # Log planning method choice to UI
+        try:
+            import core.router
+            import uuid
+            from datetime import datetime
+
+            method_name = "CoT (Chain of Thoughts)" if method == "CoT" else "GoT (Graph of Thoughts)"
+
+            core.router.safe_activity_log({
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "agent": "PlannerAgent",
+                "action": "Planning Method Selected",
+                "details": f"Planner picked {method_name} for {issue_data.get('key', 'UNKNOWN')}",
+                "status": "info",
+                "issueId": issue_data.get('key', 'UNKNOWN'),
+                "planningMethod": method,
+                "reasoning": reasoning
+            })
+        except Exception as e:
+            logger.warning(f"[PLANNER-{thread_id}] Failed to log planning method to UI: {e}")
+
         return {
             "planning_method": method,
             "tokens_used": state.get("tokens_used", 0) + tokens
