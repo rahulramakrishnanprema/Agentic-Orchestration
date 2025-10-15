@@ -134,6 +134,61 @@ def generate_got_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
 
 
 @tool
+def generate_cot_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown") -> Dict[str, Any]:
+    """
+    Generate subtasks using Chain of Thoughts (CoT) methodology for simple projects.
+    Produces a linear list of subtasks without graph structure.
+    Args:
+        issue_data: JIRA issue data containing summary and description
+        thread_id: Thread identifier for logging
+    """
+    try:
+        with stats_lock:
+            tool_stats['subtask_generation_calls'] += 1  # Reuse stat; add 'cot_generation_calls' if needed
+        logging.info(f"[{thread_id}] Generating CoT subtasks from issue data")
+        summary = issue_data.get('summary', '')
+        description = issue_data.get('description', '')
+        issue_key = issue_data.get('key', 'UNKNOWN')
+
+        formatted_prompt = prompt_loader.format(
+            "planner_cot_subtasks",
+            issue_key=issue_key,
+            summary=summary,
+            description=description
+        )
+
+        content, tokens = call_llm(formatted_prompt, agent_name="planner")
+
+        subtasks_data = []
+        try:
+            if '[' in content:
+                start = content.find('[')
+                end = content.rfind(']') + 1
+                subtasks_data = json.loads(content[start:end])
+            else:
+                raise Exception("Subtask parsing failed: No array found in response")
+        except Exception as e:
+            raise Exception(f"Subtask parsing failed: {str(e)}")
+
+        # Format as simple list (no graph)
+        subtasks_list = []
+        for i, item in enumerate(subtasks_data, start=1):
+            subtasks_list.append({
+                "id": i,
+                "description": item.get('description', ''),
+                "priority": item.get('priority', 3),
+                "requirements_covered": item.get('requirements_covered', []),
+                "reasoning": item.get('reasoning', '')
+            })
+
+        return {"success": True, "subtasks_list": subtasks_list, "tokens_used": tokens}
+    except Exception as e:
+        with stats_lock:
+            tool_stats['errors'] += 1
+        return {"success": False, "error": str(e), "tokens_used": 0}
+
+
+@tool
 def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[str, Any], thread_id: str = "unknown") -> Dict[str, Any]:
     """
     Score each subtask using LLM evaluation.
@@ -182,6 +237,7 @@ def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str,
     """
     Merge scored subtasks into main subtasks covering the complete JIRA description.
     Supports flexible number of subtasks based on complexity.
+    Preserves scores by calculating weighted average based on merged source subtasks.
     Args:
         scored_subtasks: List of scored subtasks
         jira_description: Full JIRA issue description for coverage
@@ -246,8 +302,59 @@ def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str,
             if 'id' not in subtask or 'description' not in subtask:
                 raise ValueError(f"Merged subtask {i+1} missing required fields (id, description)")
 
-        logger.info(f"[{thread_id}] Successfully merged into {len(merged)} subtasks")
-        return {"success": True, "merged_subtasks": merged, "tokens_used": tokens}
+        # IMPORTANT: Calculate scores for merged subtasks based on their source subtasks
+        # Create a mapping of scored subtasks by ID for quick lookup
+        scored_map = {st['id']: st for st in scored_subtasks}
+
+        for merged_subtask in merged:
+            # Get the source subtask IDs that were merged into this subtask
+            source_ids = merged_subtask.get('merged_from', [])
+
+            if source_ids and isinstance(source_ids, list):
+                # Calculate weighted average score from source subtasks
+                total_score = 0.0
+                count = 0
+                for source_id in source_ids:
+                    if source_id in scored_map:
+                        total_score += scored_map[source_id].get('score', 0.0)
+                        count += 1
+
+                merged_subtask['score'] = round(total_score / count, 1) if count > 0 else 0.0
+                merged_subtask['score_reasoning'] = f"Average of {count} source subtasks"
+            else:
+                # If no source IDs, calculate based on priority or default to average
+                # Use the subtask ID to find if it matches any scored subtask
+                matched_score = None
+                for scored_st in scored_subtasks:
+                    if scored_st['description'][:50] in merged_subtask['description'][:100]:
+                        matched_score = scored_st.get('score', 0.0)
+                        break
+
+                if matched_score is not None:
+                    merged_subtask['score'] = matched_score
+                    merged_subtask['score_reasoning'] = "Matched from original subtask"
+                else:
+                    # Default to average of all scores
+                    avg_score = sum(st.get('score', 0.0) for st in scored_subtasks) / len(scored_subtasks)
+                    merged_subtask['score'] = round(avg_score, 1)
+                    merged_subtask['score_reasoning'] = "Average of all subtasks"
+
+            # Ensure priority is set
+            if 'priority' not in merged_subtask:
+                merged_subtask['priority'] = merged_subtask.get('id', 0)
+
+            logger.info(f"[{thread_id}] Merged subtask {merged_subtask['id']}: Score {merged_subtask['score']:.1f} - {merged_subtask['description'][:60]}...")
+
+        # Calculate overall score
+        overall_score = sum(st.get('score', 0.0) for st in merged) / len(merged) if merged else 0.0
+        logger.info(f"[{thread_id}] Successfully merged into {len(merged)} subtasks with overall score: {overall_score:.1f}")
+
+        return {
+            "success": True,
+            "merged_subtasks": merged,
+            "overall_score": round(overall_score, 1),
+            "tokens_used": tokens
+        }
     except Exception as e:
         with stats_lock:
             tool_stats['errors'] += 1
@@ -293,6 +400,7 @@ def get_planner_tools_stats() -> Dict[str, Any]:
             "stats": dict(tool_stats),
             "features": [
                 "got_subtask_generation",
+                "cot_subtask_generation",  # NEW
                 "subtask_scoring",
                 "subtask_merging",
                 "hitl_validation",

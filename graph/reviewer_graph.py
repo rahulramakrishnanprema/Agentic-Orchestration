@@ -1,3 +1,5 @@
+
+
 from typing import Dict, Any, List, Optional, TypedDict, Annotated
 from langgraph.graph import StateGraph, END
 from langgraph.constants import Send
@@ -11,7 +13,6 @@ from ui.ui import workflow_status, workflow_status_lock
 from services.performance_tracker import performance_tracker  # Add performance tracker import
 import logging
 from threading import Lock
-import queue  # NEW: Add import for queue
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,7 @@ class ReviewerState(TypedDict):
     error: Optional[str]
     processing_time: float
 
-    # NEW: Queue for receiving files from developer
-    review_queue: Optional[queue.Queue]
+    # NOTE: review_queue removed - Queue objects cannot be serialized in LangGraph state
 
 def _node_format_files(state: ReviewerState) -> ReviewerState:
     """LangGraph node: Format files for review processing."""

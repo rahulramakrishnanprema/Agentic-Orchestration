@@ -149,3 +149,4 @@ class AssemblerAgent:
         except Exception as e:
             logger.error(f"[ASSEMBLER-{thread_id}] Document creation failed: {e}")
             return {"success": False, "error": str(e)}
+

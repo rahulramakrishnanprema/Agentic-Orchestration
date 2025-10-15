@@ -49,12 +49,13 @@ class JiraPlannerWorkflow:
                 return
 
             self.mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_DATABASE", "code_review")
-            coll_name = os.getenv("PLANNER_FEEDBACK", "planner-feedback")
+            # Use MONGODB_PERFORMANCE_DATABASE and MONGODB_AGENT_PERFORMANCE
+            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE")
+            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE")
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
 
-            logger.info(f"JIRA Planner MongoDB ready - Collection: {coll_name}")
+            logger.info(f"JIRA Planner MongoDB ready - Database: {db_name}, Collection: {coll_name}")
         except Exception as e:
             logger.error(f"JIRA Planner MongoDB init failed: {e}")
             self.mongo_collection = None
@@ -238,7 +239,8 @@ class JiraPlannerWorkflow:
                 "approved_subtasks": result.get("approved_subtasks", []),
                 "planner_tokens": result.get("tokens_used", 0),
                 "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0),
-                "error": result.get("error") if not result.get("success") else state.get("error")
+                "error": result.get("error") if not result.get("success") else state.get("error"
+                )
             }
 
         return jira_planner_node

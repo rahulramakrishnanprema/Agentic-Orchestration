@@ -634,4 +634,17 @@ if __name__ == "__main__":
         print("System initialization failed")
 
 # For LangGraph Studio compatibility
-app_graph = LangGraphRouter(config).workflow if 'LANGGRAPH_STUDIO' in os.environ else None
+# Export a function that creates the graph on-demand
+def create_graph():
+    """Create and return the workflow graph for LangGraph Studio"""
+    try:
+        router = LangGraphRouter(config)
+        logger.info("Graph created successfully for LangGraph Studio")
+        return router.workflow
+    except Exception as e:
+        logger.error(f"Failed to create graph for LangGraph Studio: {e}")
+        raise
+
+# Export the graph - Studio will call create_graph() when needed
+app_graph = create_graph()
+

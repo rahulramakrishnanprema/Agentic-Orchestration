@@ -8,7 +8,6 @@ from tools.prompt_loader import PromptLoader
 from tools.utils import log_activity
 from ui.ui import workflow_status, workflow_status_lock
 import logging
-import queue  # NEW: Add import for queue
 from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
 from services.llm_service import call_llm  # Import for per-file generation
 
@@ -33,7 +32,6 @@ class DeveloperState(TypedDict):
     persistent_memory: Dict[str, Any]
     memory_updated: bool
     tokens_used: Annotated[int, lambda x, y: x + y]  # Reducer for summing tokens
-    review_queue: Optional[queue.Queue]  # Add queue for reviewer handoff
 
 
 def _route_success_or_error(state: DeveloperState) -> str:
@@ -120,12 +118,6 @@ def _merge_generated_files_node(state: DeveloperState) -> Dict[str, Any]:
     """Fan-in: Merge generated files and proceed to memory update."""
     save_files_locally(state['generated_files'], state['issue_data'].get('key', 'UNKNOWN'))
 
-    if state.get('review_queue'):
-        state['review_queue'].put({
-            "files": state['generated_files'],
-            "issue_data": state['issue_data'],
-            "thread_id": state['thread_id']
-        })
 
     return state
 

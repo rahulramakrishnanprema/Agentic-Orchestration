@@ -1,7 +1,7 @@
 # Updated graph/planner_graph.py
 from typing import Dict, Any, List, Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
-from tools.planner_tools import generate_got_subtasks, score_subtasks_with_llm, merge_subtasks, perform_hitl_validation
+from tools.planner_tools import generate_got_subtasks, generate_cot_subtasks, score_subtasks_with_llm, merge_subtasks, perform_hitl_validation  # NEW: added cot
 from ui.ui import workflow_status, workflow_status_lock
 import logging
 import os
@@ -11,11 +11,11 @@ from threading import Thread
 
 logger = logging.getLogger(__name__)
 
-
 class PlannerState(TypedDict):
     """State for the planner sub-graph"""
     issue_data: Dict[str, Any]
     thread_id: str
+    planning_method: Optional[str]  # NEW
     subtasks_graph: Optional[Dict[str, Any]]
     scored_subtasks: List[Dict[str, Any]]
     merged_subtasks: List[Dict[str, Any]]
@@ -41,12 +41,84 @@ def _check_overall_score(state: PlannerState) -> str:
     return "review"
 
 
+def _route_planning_method(state: PlannerState) -> str:
+    method = state.get("planning_method")
+    if method == "CoT":
+        return "CoT"
+    elif method == "GOT":
+        return "GOT"
+    else:
+        return "error"
+
+
+def _decide_planning_method_node(state: PlannerState) -> Dict[str, Any]:
+    with workflow_status_lock:
+        workflow_status["agent"] = "PlannerAgent"
+    thread_id = state.get("thread_id", "unknown")
+    issue_data = state.get("issue_data", {})
+    logger.info(f"[PLANNER-{thread_id}] Deciding planning method...")
+
+    try:
+        from agents.core_planner_agent import CorePlannerAgent  # For prompt_loader if needed
+        from tools.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader("prompts")
+
+        formatted_prompt = prompt_loader.format(
+            "planner_decide_method",
+            issue_key=issue_data.get('key'),
+            summary=issue_data.get('summary'),
+            description=issue_data.get('description')
+        )
+
+        from services.llm_service import call_llm
+        response, tokens = call_llm(formatted_prompt, agent_name="planner")
+        from tools.planner_tools import parse_json_from_text
+        decision = parse_json_from_text(response)
+
+        method = decision.get("method", "GOT")
+        reasoning = decision.get("reasoning", "")
+
+        logger.info(f"[PLANNER-{thread_id}] Decided on {method}: {reasoning}")
+
+        return {
+            "planning_method": method,
+            "tokens_used": state.get("tokens_used", 0) + tokens
+        }
+    except Exception as e:
+        logger.error(f"[PLANNER-{thread_id}] Decision failed: {e}")
+        return {"planning_method": "GOT", "error": str(e)}
+
+
+def _generate_cot_subtasks_node(state: PlannerState) -> Dict[str, Any]:
+    with workflow_status_lock:
+        workflow_status["agent"] = "PlannerAgent"
+    thread_id = state.get("thread_id", "unknown")
+    issue_data = state.get("issue_data", {})
+    logger.info(f"[PLANNER-{thread_id}] Generating CoT subtasks...")
+    try:
+        result = generate_cot_subtasks.invoke({
+            "issue_data": issue_data,
+            "thread_id": thread_id
+        })
+        if result.get("success"):
+            return {
+                "merged_subtasks": result.get("subtasks_list"),
+                "overall_subtask_score": 10.0,
+                "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
+            }
+        else:
+            return {"error": result.get("error", "CoT subtask generation failed")}
+    except Exception as e:
+        logger.error(f"[PLANNER-{thread_id}] CoT subtask generation failed: {e}")
+        return {"error": str(e)}
+
+
 def _generate_subtasks_node(state: PlannerState) -> Dict[str, Any]:
     with workflow_status_lock:
         workflow_status["agent"] = "PlannerAgent"
     thread_id = state.get("thread_id", "unknown")
     issue_data = state.get("issue_data", {})
-    logger.info(f"[PLANNER-{thread_id}] Generating subtasks...")
+    logger.info(f"[PLANNER-{thread_id}] Generating GOT subtasks...")
     try:
         result = generate_got_subtasks.invoke({
             "issue_data": issue_data,
@@ -67,9 +139,9 @@ def _generate_subtasks_node(state: PlannerState) -> Dict[str, Any]:
                 "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
             }
         else:
-            return {"error": result.get("error", "Subtask generation failed")}
+            return {"error": result.get("error", "GOT subtask generation failed")}
     except Exception as e:
-        logger.error(f"[PLANNER-{thread_id}] Subtask generation failed: {e}")
+        logger.error(f"[PLANNER-{thread_id}] GOT Subtask generation failed: {e}")
         return {"error": str(e)}
 
 
@@ -226,15 +298,22 @@ def _handle_error_node(state: PlannerState) -> Dict[str, Any]:
 
 def build_planner_graph():
     graph = StateGraph(PlannerState)
+    # Add new nodes
+    graph.add_node("decide_planning_method", _decide_planning_method_node)
+    graph.add_node("generate_cot_subtasks", _generate_cot_subtasks_node)
     # Add merge node
-    graph.add_node("generate_subtasks", _generate_subtasks_node)
+    graph.add_node("generate_subtasks", _generate_subtasks_node)  # GOT
     graph.add_node("score_subtasks", _score_subtasks_node)
     graph.add_node("merge_subtasks", _merge_subtasks_node)
     graph.add_node("set_approved_subtasks", _set_approved_subtasks_node)
     graph.add_node("hitl_validation", _hitl_validation_node)
     graph.add_node("handle_error", _handle_error_node)
     # Edges
-    graph.add_edge(START, "generate_subtasks")
+    graph.add_edge(START, "decide_planning_method")
+    graph.add_conditional_edges("decide_planning_method", _route_planning_method,
+                                {"CoT": "generate_cot_subtasks", "GOT": "generate_subtasks", "error": "handle_error"})
+    graph.add_conditional_edges("generate_cot_subtasks", _route_success_or_error,
+                                {"success": "set_approved_subtasks", "error": "handle_error"})
     graph.add_conditional_edges("generate_subtasks", _route_success_or_error,
                                 {"success": "score_subtasks", "error": "handle_error"})
     graph.add_conditional_edges("score_subtasks", _route_success_or_error,

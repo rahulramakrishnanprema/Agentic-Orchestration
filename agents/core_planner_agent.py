@@ -23,7 +23,7 @@ load_dotenv()
 
 class CorePlannerState(dict):
     """State for the core planner workflow - Generic and reusable"""
-    pass
+    planning_method: Optional[str]  # NEW: "CoT" or "GOT"
 
 
 class CorePlannerAgent:
@@ -50,18 +50,36 @@ class CorePlannerAgent:
         """Build the core planner LangGraph"""
         graph = StateGraph(dict)
 
-        # Add nodes
-        graph.add_node("generate_subtasks", self._generate_subtasks_node)
+        # Add new decision node
+        graph.add_node("decide_planning_method", self._decide_planning_method_node)
+
+        # Add CoT generation node
+        graph.add_node("generate_cot_subtasks", self._generate_cot_subtasks_node)
+
+        # Existing nodes (GOT path)
+        graph.add_node("generate_got_subtasks", self._generate_got_subtasks_node)
         graph.add_node("score_subtasks", self._score_subtasks_node)
         graph.add_node("merge_subtasks", self._merge_subtasks_node)
         graph.add_node("set_approved", self._set_approved_node)
         graph.add_node("hitl_validation", self._hitl_validation_node)
         graph.add_node("handle_error", self._handle_error_node)
 
-        # Define edges
-        graph.add_edge(START, "generate_subtasks")
+        # New edges
+        graph.add_edge(START, "decide_planning_method")
         graph.add_conditional_edges(
-            "generate_subtasks",
+            "decide_planning_method",
+            self._route_planning_method,
+            {"CoT": "generate_cot_subtasks", "GOT": "generate_got_subtasks", "error": "handle_error"}
+        )
+        graph.add_conditional_edges(
+            "generate_cot_subtasks",
+            self._route_success_or_error,
+            {"success": "set_approved", "error": "handle_error"}  # Directly to approve for CoT
+        )
+
+        # Existing edges for GOT
+        graph.add_conditional_edges(
+            "generate_got_subtasks",
             self._route_success_or_error,
             {"success": "score_subtasks", "error": "handle_error"}
         )
@@ -100,13 +118,99 @@ class CorePlannerAgent:
         score = state.get("overall_subtask_score", 0.0)
         return "proceed" if score >= self.score_threshold else "review"
 
-    def _generate_subtasks_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate subtasks from content"""
+    def _route_planning_method(self, state: Dict[str, Any]) -> str:
+        """Route based on decided method"""
+        method = state.get("planning_method")
+        if method == "CoT":
+            return "CoT"
+        elif method == "GOT":
+            return "GOT"
+        else:
+            return "error"  # Default to error/handle
+
+    def _decide_planning_method_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Decide between CoT and GOT using LLM"""
+        thread_id = state.get("thread_id", "unknown")
+        content = state.get("content", "")
+        context = state.get("context", {})
+        logger.info(f"[CORE-PLANNER-{thread_id}] Deciding planning method...")
+
+        try:
+            # Convert to issue_data for consistency
+            issue_data = {
+                "key": context.get("identifier", "TASK-001"),
+                "summary": context.get("title", "Task"),
+                "description": content,
+                **context
+            }
+
+            formatted_prompt = self.prompt_loader.format(
+                "planner_decide_method",
+                issue_key=issue_data.get('key'),
+                summary=issue_data.get('summary'),
+                description=issue_data.get('description')
+            )
+
+            from services.llm_service import call_llm  # Assume this is your LLM call
+            response, tokens = call_llm(formatted_prompt, agent_name="planner")
+            from tools.planner_tools import parse_json_from_text  # Reuse parser
+            decision = parse_json_from_text(response)
+
+            method = decision.get("method", "GOT")  # Default to GOT if invalid
+            reasoning = decision.get("reasoning", "")
+
+            logger.info(f"[CORE-PLANNER-{thread_id}] Decided on {method}: {reasoning}")
+
+            return {
+                "planning_method": method,
+                "tokens_used": state.get("tokens_used", 0) + tokens
+            }
+        except Exception as e:
+            logger.error(f"[CORE-PLANNER-{thread_id}] Decision failed: {e}")
+            return {"planning_method": "GOT", "error": str(e)}  # Default to GOT on error
+
+    def _generate_cot_subtasks_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate subtasks using CoT"""
         thread_id = state.get("thread_id", "unknown")
         content = state.get("content", "")
         context = state.get("context", {})
 
-        logger.info(f"[CORE-PLANNER-{thread_id}] Generating subtasks...")
+        logger.info(f"[CORE-PLANNER-{thread_id}] Generating CoT subtasks...")
+
+        try:
+            from tools.planner_tools import generate_cot_subtasks
+
+            issue_data = {
+                "key": context.get("identifier", "TASK-001"),
+                "summary": context.get("title", "Task"),
+                "description": content,
+                **context
+            }
+
+            result = generate_cot_subtasks.invoke({
+                "issue_data": issue_data,
+                "thread_id": thread_id
+            })
+
+            if result.get("success"):
+                return {
+                    "merged_subtasks": result.get("subtasks_list"),
+                    "overall_subtask_score": 10.0,  # High score since no scoring needed
+                    "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
+                }
+            else:
+                return {"error": result.get("error", "CoT subtask generation failed")}
+        except Exception as e:
+            logger.error(f"[CORE-PLANNER-{thread_id}] CoT generation failed: {e}")
+            return {"error": str(e)}
+
+    def _generate_got_subtasks_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate subtasks from content (GOT)"""
+        thread_id = state.get("thread_id", "unknown")
+        content = state.get("content", "")
+        context = state.get("context", {})
+
+        logger.info(f"[CORE-PLANNER-{thread_id}] Generating GOT subtasks...")
 
         try:
             from tools.planner_tools import generate_got_subtasks
@@ -130,10 +234,10 @@ class CorePlannerAgent:
                     "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
                 }
             else:
-                return {"error": result.get("error", "Subtask generation failed")}
+                return {"error": result.get("error", "GOT subtask generation failed")}
 
         except Exception as e:
-            logger.error(f"[CORE-PLANNER-{thread_id}] Generation failed: {e}")
+            logger.error(f"[CORE-PLANNER-{thread_id}] GOT Generation failed: {e}")
             return {"error": str(e)}
 
     def _score_subtasks_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -291,7 +395,8 @@ class CorePlannerAgent:
                 "score": float,
                 "tokens_used": int,
                 "needs_human": bool,
-                "error": Optional[str]
+                "error": Optional[str],
+                "planning_method": str  # NEW: For logging/tracking
             }
         """
         import threading
@@ -310,6 +415,7 @@ class CorePlannerAgent:
                 "content": content,
                 "context": context,
                 "thread_id": thread_id,
+                "planning_method": None,  # NEW
                 "subtasks_graph": None,
                 "scored_subtasks": [],
                 "merged_subtasks": [],
@@ -333,7 +439,8 @@ class CorePlannerAgent:
                     "error": final_state.get("error"),
                     "needs_human": final_state.get("needs_human", False),
                     "tokens_used": final_state.get("tokens_used", 0),
-                    "subtasks": []
+                    "subtasks": [],
+                    "planning_method": final_state.get("planning_method", "Unknown")
                 }
 
             logger.info(f"[CORE-PLANNER-{thread_id}] Planning completed in {duration:.1f}s")
@@ -344,7 +451,8 @@ class CorePlannerAgent:
                 "score": final_state.get("overall_subtask_score", 0.0),
                 "tokens_used": final_state.get("tokens_used", 0),
                 "needs_human": final_state.get("needs_human", False),
-                "error": None
+                "error": None,
+                "planning_method": final_state.get("planning_method", "Unknown")
             }
 
         except Exception as e:
@@ -354,7 +462,8 @@ class CorePlannerAgent:
                 "error": str(e),
                 "needs_human": True,
                 "tokens_used": 0,
-                "subtasks": []
+                "subtasks": [],
+                "planning_method": "Unknown"
             }
 
     def create_langgraph_node(self):
@@ -379,7 +488,8 @@ class CorePlannerAgent:
                 "approved_subtasks": result.get("subtasks", []),
                 "planner_tokens": result.get("tokens_used", 0),
                 "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0),
-                "error": result.get("error") if not result.get("success") else state.get("error")
+                "error": result.get("error") if not result.get("success") else state.get("error"),
+                "planning_method": result.get("planning_method")  # NEW
             }
 
         return planner_node
