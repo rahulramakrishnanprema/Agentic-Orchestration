@@ -193,8 +193,15 @@ class CorePlannerAgent:
             })
 
             if result.get("success"):
+                subtasks_list = result.get("subtasks_list", [])
+
+                # Log each CoT subtask to terminal (similar to GoT)
+                logger.info(f"[CORE-PLANNER-{thread_id}] Generated {len(subtasks_list)} CoT subtasks:")
+                for subtask in subtasks_list:
+                    logger.info(f"[CORE-PLANNER-{thread_id}] CoT Subtask {subtask['id']}: Priority {subtask.get('priority', 'N/A')} - {subtask['description']}")
+
                 return {
-                    "merged_subtasks": result.get("subtasks_list"),
+                    "merged_subtasks": subtasks_list,
                     "overall_subtask_score": 10.0,  # High score since no scoring needed
                     "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
                 }

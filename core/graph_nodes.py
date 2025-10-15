@@ -186,21 +186,38 @@ class WorkflowNodes:
                 print(f"Planner Agent Time Taken: {duration:.2f} seconds")
                 print(f"Overall Tokens Used: {state['tokens_used']}")
 
-                # Calculate total score from approved subtasks
+                # Calculate overall score from approved subtasks
                 approved_subtasks = planning_result.get("approved_subtasks", [])
-                total_score = sum(subtask.get("score", 0) for subtask in approved_subtasks)
-                avg_score = total_score / len(approved_subtasks) if approved_subtasks else 0
 
+                # Get the overall_subtask_score from planning result (this is the average score calculated by the planner)
+                # For GoT: this is the average of individual subtask scores (e.g., 7.5/10)
+                # For CoT: this is always 10.0/10 (perfect score)
+                overall_score = planning_result.get("overall_subtask_score", 10.0)
 
-                # Log: Planner Completed
+                # Convert to percentage for display (0-10 scale -> 0-100%)
+                # 7.5/10 becomes 75%, 10.0/10 becomes 100%
+                display_score = overall_score * 10  # Convert to percentage
+
+                # Prepare subtasks without individual scores for UI
+                subtasks_for_ui = []
+                for subtask in approved_subtasks:
+                    subtask_copy = subtask.copy()
+                    # Remove the score field from the subtask display
+                    if 'score' in subtask_copy:
+                        del subtask_copy['score']
+                    subtasks_for_ui.append(subtask_copy)
+
+                # Log: Planner Completed with final subtasks
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
                     "agent": "PlannerAgent",
                     "action": "Planning Completed",
-                    "details": f"Planner Agent planning completed for {current_issue['key']}",
+                    "details": f"Planner Agent completed planning for {current_issue['key']} with {len(approved_subtasks)} final subtasks (Score: {overall_score:.1f}/10)",
                     "status": "success",
-                    "issueId": current_issue['key']
+                    "issueId": current_issue['key'],
+                    "subtasks": subtasks_for_ui,
+                    "totalScore": round(display_score, 1)  # Display as percentage (75.0%)
                 })
 
                 # Increment planner task completion

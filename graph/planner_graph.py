@@ -1,11 +1,10 @@
 # Updated graph/planner_graph.py
 from typing import Dict, Any, List, Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
-from tools.planner_tools import generate_got_subtasks, generate_cot_subtasks, score_subtasks_with_llm, merge_subtasks, perform_hitl_validation  # NEW: added cot
+from tools.planner_tools import generate_got_subtasks, generate_cot_subtasks, score_subtasks_with_llm, merge_subtasks
 from ui.ui import workflow_status, workflow_status_lock
 import logging
 import os
-from dotenv import load_dotenv
 import queue
 from threading import Thread
 
@@ -101,8 +100,15 @@ def _generate_cot_subtasks_node(state: PlannerState) -> Dict[str, Any]:
             "thread_id": thread_id
         })
         if result.get("success"):
+            subtasks_list = result.get("subtasks_list", [])
+
+            # Log each CoT subtask to terminal (similar to GoT)
+            logger.info(f"[PLANNER-{thread_id}] Generated {len(subtasks_list)} CoT subtasks:")
+            for subtask in subtasks_list:
+                logger.info(f"[PLANNER-{thread_id}] CoT Subtask {subtask['id']}: Priority {subtask.get('priority', 'N/A')} - {subtask['description']}")
+
             return {
-                "merged_subtasks": result.get("subtasks_list"),
+                "merged_subtasks": subtasks_list,
                 "overall_subtask_score": 10.0,
                 "tokens_used": state.get("tokens_used", 0) + result.get("tokens_used", 0)
             }
@@ -172,28 +178,11 @@ def _score_subtasks_node(state: PlannerState) -> Dict[str, Any]:
             # Calculate total score
             total_score = sum(s['score'] for s in scored_subtasks) if scored_subtasks else 0
 
-            # NEW: Log subtasks BEFORE merging to UI
-            import core.router
-            from datetime import datetime
-            import uuid
-            core.router.safe_activity_log({
-                "id": str(uuid.uuid4()),
-                "timestamp": datetime.now().isoformat(),
-                "agent": "PlannerAgent",
-                "action": "Subtasks Scored (Before Merge)",
-                "details": f"Scored {len(scored_subtasks)} subtasks for {issue_data.get('key', 'UNKNOWN')} - Ready for review before merging",
-                "status": "info",
-                "issueId": issue_data.get('key'),
-                "subtasks": scored_subtasks,
-                "totalScore": round(total_score, 2),
-            })
+            # REMOVED: Don't log subtasks with individual scores before merge
+            # The final subtasks will be logged after planning is complete
 
             # Log overall score first
             logger.info(f"[PLANNER-{thread_id}] Overall subtask score: {overall:.1f}")
-            # Then log all subtasks with scores
-            for subtask in scored_subtasks:
-                logger.info(
-                    f"[PLANNER-{thread_id}] Subtask {subtask['id']}: Score {subtask['score']:.1f} - {subtask['description']}")
             # NEW: Store scores (update existing or new doc)
             from agents.planner_agent import PlannerAgent # Moved import inside function
             PlannerAgent._store_to_mongodb(
@@ -246,7 +235,21 @@ def _merge_subtasks_node(state: PlannerState) -> Dict[str, Any]:
 
 def _set_approved_subtasks_node(state: PlannerState) -> Dict[str, Any]:
     """Node: Set approved subtasks for high-scoring tasks"""
-    state["approved_subtasks"] = state.get("merged_subtasks", [])  # Use merged subtasks
+    thread_id = state.get("thread_id", "unknown")
+    merged_subtasks = state.get("merged_subtasks", [])
+    planning_method = state.get("planning_method", "Unknown")
+
+    # Log final approved subtasks summary
+    logger.info(f"[PLANNER-{thread_id}] ===== Planning Complete ({planning_method}) =====")
+    logger.info(f"[PLANNER-{thread_id}] Total approved subtasks: {len(merged_subtasks)}")
+    logger.info(f"[PLANNER-{thread_id}] Overall score: {state.get('overall_subtask_score', 0.0):.1f}")
+
+    # Log each final approved subtask
+    for subtask in merged_subtasks:
+        score_info = f"Score {subtask.get('score', 'N/A')}" if 'score' in subtask else ""
+        logger.info(f"[PLANNER-{thread_id}] ✓ Subtask {subtask['id']}: {score_info} - {subtask['description'][:80]}...")
+
+    state["approved_subtasks"] = merged_subtasks
     state["needs_human"] = False
     return state
 

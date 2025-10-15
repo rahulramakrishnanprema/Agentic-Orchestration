@@ -42,15 +42,11 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 8) return 'text-green-600 bg-green-100';
-    if (score >= 6) return 'text-yellow-600 bg-yellow-100';
-    return 'text-red-600 bg-red-100';
-  };
-
   const getTotalScoreColor = (score: number) => {
-    if (score >= 40) return 'text-green-600 bg-green-100 border-green-300';
-    if (score >= 30) return 'text-yellow-600 bg-yellow-100 border-yellow-300';
+    // Planner total score is now 0-100% scale (converted from 0-10)
+    // 75% (7.5/10) = good, 60% (6/10) = acceptable, below 60% = needs improvement
+    if (score >= 80) return 'text-green-600 bg-green-100 border-green-300';
+    if (score >= 60) return 'text-yellow-600 bg-yellow-100 border-yellow-300';
     return 'text-orange-600 bg-orange-100 border-orange-300';
   };
 
@@ -207,14 +203,13 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
                               if (!subtask) return null;
 
                               const subtaskId = subtask.id !== undefined ? subtask.id : index;
-                              const subtaskScore = typeof subtask.score === 'number' ? subtask.score : 0;
 
                               return (
                                 <div
                                   key={`${log.id}-subtask-${subtaskId}`}
                                   className="bg-white rounded-lg p-2.5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
                                 >
-                                  <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2">
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2 mb-1">
                                         <span className="text-xs font-bold text-slate-500">
@@ -235,9 +230,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
                                         </p>
                                       )}
                                     </div>
-                                    <div className={`flex-shrink-0 px-2 py-1 rounded font-bold text-sm ${getScoreColor(subtaskScore)}`}>
-                                      {subtaskScore.toFixed(1)}
-                                    </div>
+                                    {/* REMOVED: Individual subtask score display */}
                                   </div>
                                 </div>
                               );
