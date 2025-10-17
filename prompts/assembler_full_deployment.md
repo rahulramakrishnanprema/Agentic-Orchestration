@@ -4,6 +4,7 @@ Rules for creating implementation steps:
 1.properly analyze each subtask to identify all necessary components.
 2. Break down each subtask into clear, manageable steps.
 3. Ensure each step is logically ordered for efficient execution.
+4. properly tell about files and funtion connections in all files 
 Input:
 - Issue Summary: {{{summary}}}
 - Issue Description: {{{description}}}
@@ -51,6 +52,7 @@ CRITICAL REQUIREMENTS:
       "logic_flows": ["step-by-step logic"],
       "error_handling": ["descriptions"],
       "connections": ["to other files/subtasks"]
+      "important note": ["tell the connections between files and functions in all files. thay want to know how the files and functions are connected to each other to make the project work as a whole.properly describe the connections"]
     }
   },
     "instructions":"never create any test files or extra files only give the necessary files to run the project"
