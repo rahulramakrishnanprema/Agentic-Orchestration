@@ -126,15 +126,25 @@ def _initialize_mongodb():
         database_name = config.MONGODB_PERFORMANCE_DATABASE
         collection_name = config.MONGODB_REVIEWER_COLLECTION
 
+        # Enhanced connection settings for MongoDB Atlas replica sets
         mongo_client = MongoClient(
             connection_string,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=10000,
-            maxPoolSize=10
+            serverSelectionTimeoutMS=30000,  # Increased to 30 seconds
+            connectTimeoutMS=20000,  # 20 seconds connection timeout
+            socketTimeoutMS=20000,  # 20 seconds socket timeout
+            retryWrites=True,
+            retryReads=True,
+            readPreference='primaryPreferred',  # Try primary, fall back to secondary
+            maxPoolSize=50,
+            minPoolSize=10
         )
 
-        server_info = mongo_client.server_info()
-        logger.debug(f"MongoDB connected - Version: {server_info.get('version', 'Unknown')}")
+        # Test connection with better error handling
+        try:
+            server_info = mongo_client.server_info()
+            logger.debug(f"MongoDB connected - Version: {server_info.get('version', 'Unknown')}")
+        except Exception as ping_error:
+            logger.warning(f"MongoDB connection test failed but continuing: {ping_error}")
 
         mongo_db = mongo_client[database_name]
         mongo_collection = mongo_db[collection_name]
@@ -144,12 +154,14 @@ def _initialize_mongodb():
             mongo_collection.create_index("date")
             mongo_collection.create_index("timestamp")
             mongo_collection.create_index([("approved", 1), ("date", -1)])
+            logger.info("MongoDB indexes created successfully")
         except Exception as e:
             logger.warning(f"Could not create MongoDB indexes: {e}")
 
-        logger.debug(f"MongoDB ready - Database: {database_name}, Collection: {collection_name}")
+        logger.info(f"MongoDB ready - Database: {database_name}, Collection: {collection_name}")
     except Exception as e:
         logger.error(f"MongoDB initialization failed: {e}")
+        logger.info("Continuing without MongoDB - reviews will not be persisted")
         mongo_client = None
         mongo_collection = None
 

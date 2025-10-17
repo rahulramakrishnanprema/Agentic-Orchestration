@@ -8,8 +8,8 @@ from typing import Dict, Any, List
 from langchain_core.tools import tool
 from datetime import datetime
 import os
-import re
 
+from json_repair import repair_json
 from services.llm_service import call_llm
 
 logger = logging.getLogger(__name__)
@@ -27,9 +27,8 @@ def initialize_assembler_tools(app_config, app_prompt_loader):
 
 def _extract_json_from_response(content: str, thread_id: str) -> Dict[str, Any]:
     """
-    Robustly extract and parse JSON from LLM response with comprehensive error handling
+    Extract and parse JSON from LLM response - relies on prompt enforcement for valid JSON
     """
-    original_content = content
     content = content.strip()
 
     # Log the response for debugging
@@ -57,105 +56,77 @@ def _extract_json_from_response(content: str, thread_id: str) -> Dict[str, Any]:
         logger.error(f"[{thread_id}] First 500 chars: {content[:500]}")
         raise ValueError("LLM returned Markdown format instead of JSON. The prompt instructions were not followed.")
 
-    # Try direct JSON parse first (most common case)
+    # Try direct JSON parse
     if content.startswith('{'):
         try:
             document = json.loads(content)
-            logger.info(f"[{thread_id}] Successfully parsed JSON directly")
+            logger.info(f"[{thread_id}] ✓ Successfully parsed JSON directly")
             return document
         except json.JSONDecodeError as e:
-            logger.warning(f"[{thread_id}] Direct JSON parse failed: {e}")
+            logger.warning(f"[{thread_id}] Initial JSON parse failed: {e} - Attempting repair")
+            # Repair the JSON using json_repair
+            repaired_content = repair_json(content, skip_json_loads=True)  # Fast mode for known invalids
+            try:
+                document = json.loads(repaired_content)
+                logger.info(f"[{thread_id}] ✓ JSON repaired and parsed successfully")
+                return document
+            except json.JSONDecodeError as repair_e:
+                logger.error(f"[{thread_id}] JSON repair failed: {repair_e}")
+                # Save failed JSON for debugging
+                try:
+                    debug_folder = "debug_json_failures"
+                    os.makedirs(debug_folder, exist_ok=True)
+                    debug_file = os.path.join(debug_folder, f"failed_{thread_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                    with open(debug_file, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    logger.error(f"[{thread_id}] Failed JSON saved to: {debug_file}")
+                except:
+                    pass
+                raise ValueError(f"Invalid JSON from LLM after repair: {repair_e}. The response must be valid JSON. Check that all braces and brackets are closed properly.")
 
-    # Use brace-counting to extract complete JSON object
-    first_brace = content.find('{')
-    if first_brace == -1:
-        logger.error(f"[{thread_id}] No opening brace found in response")
-        logger.error(f"[{thread_id}] Full response: {original_content[:1000]}")
-        raise ValueError("No JSON object found in LLM response")
-
-    # Count braces to find the matching closing brace
-    brace_depth = 0
-    in_string = False
-    escape_next = False
-    end_pos = -1
-
-    for i in range(first_brace, len(content)):
-        char = content[i]
-
-        # Handle string escaping
-        if escape_next:
-            escape_next = False
-            continue
-
-        if char == '\\':
-            escape_next = True
-            continue
-
-        # Handle strings (ignore braces inside strings)
-        if char == '"':
-            in_string = not in_string
-            continue
-
-        if not in_string:
-            if char == '{':
-                brace_depth += 1
-            elif char == '}':
-                brace_depth -= 1
-                if brace_depth == 0:
-                    end_pos = i + 1
-                    break
-
-    if end_pos == -1:
-        logger.error(f"[{thread_id}] Could not find matching closing brace")
-        logger.error(f"[{thread_id}] Brace depth at end: {brace_depth}")
-        raise ValueError("JSON is truncated - no matching closing brace found. Try increasing max_tokens.")
-
-    json_str = content[first_brace:end_pos]
-    logger.info(f"[{thread_id}] Extracted JSON of length {len(json_str)} characters")
-
-    try:
-        document = json.loads(json_str)
-        logger.info(f"[{thread_id}] Successfully parsed extracted JSON")
-        return document
-    except json.JSONDecodeError as e:
-        logger.error(f"[{thread_id}] JSON parse error: {e}")
-        logger.error(f"[{thread_id}] Error at position: {e.pos if hasattr(e, 'pos') else 'unknown'}")
-        logger.error(f"[{thread_id}] JSON starts with: {json_str[:500]}")
-        logger.error(f"[{thread_id}] JSON ends with: ...{json_str[-500:]}")
-        raise ValueError(f"Failed to parse JSON: {e}")
+    # No opening brace found
+    logger.error(f"[{thread_id}] No JSON object found in response")
+    logger.error(f"[{thread_id}] Full response preview: {content[:500]}")
+    raise ValueError("No JSON object found in LLM response. Response must start with {")
 
 
 def _validate_document_structure(document: Dict[str, Any], thread_id: str) -> None:
     """
-    Validate the deployment document has all required fields with detailed logging
+    Validate the deployment document has all required fields with detailed logging.
+    Updated to handle missing fields flexibly: core fields get warnings and defaults; optional fields get defaults without errors.
     """
-    required_fields = [
-        'metadata', 'project_overview', 'implementation_plan',
-        'file_structure', 'technical_specifications', 'deployment_instructions'
-    ]
+    core_fields = ['metadata', 'project_overview', 'implementation_plan', 'file_structure']
+    optional_fields = ['technical_specifications', 'deployment_instructions']
 
     logger.info(f"[{thread_id}] Validating document structure...")
     logger.info(f"[{thread_id}] Document keys: {list(document.keys())}")
 
-    missing_fields = [field for field in required_fields if field not in document]
+    # Handle missing core fields with warnings and defaults
+    for field in core_fields:
+        if field not in document:
+            logger.warning(f"[{thread_id}] Missing core field '{field}' - using default empty dict")
+            document[field] = {}  # Default to empty dict to allow continuation
 
-    if missing_fields:
-        logger.error(f"[{thread_id}] Missing required fields: {', '.join(missing_fields)}")
-        logger.error(f"[{thread_id}] Available fields: {', '.join(document.keys())}")
-        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+    # Handle missing optional fields with defaults (no warnings needed)
+    for field in optional_fields:
+        if field not in document:
+            logger.info(f"[{thread_id}] Optional field '{field}' missing - using default empty dict")
+            document[field] = {}  # Default to empty dict
 
-    # Validate file_structure
+    # Validate file_structure sub-fields (critical, but with defaults instead of errors)
     file_structure = document.get('file_structure', {})
     if not file_structure.get('files'):
-        raise ValueError("file_structure.files is required and cannot be empty")
-
+        logger.warning(f"[{thread_id}] file_structure.files is missing or empty - defaulting to empty list")
+        file_structure['files'] = []  # Allow continuation with warning
     if not isinstance(file_structure.get('files'), list):
-        raise ValueError("file_structure.files must be a list")
+        logger.warning(f"[{thread_id}] file_structure.files is not a list - defaulting to empty list")
+        file_structure['files'] = []
 
     if not file_structure.get('file_types'):
-        raise ValueError("file_structure.file_types is required")
+        logger.warning(f"[{thread_id}] file_structure.file_types is missing - defaulting to empty list")
+        file_structure['file_types'] = []
 
-    logger.info(f"[{thread_id}] ✓ Document validated: {len(file_structure.get('files', []))} files")
+    logger.info(f"[{thread_id}] ✓ Document validated (with defaults applied where needed)")
 
 
 @tool

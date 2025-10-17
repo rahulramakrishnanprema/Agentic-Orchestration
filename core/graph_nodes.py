@@ -80,7 +80,13 @@ class WorkflowNodes:
             if jira_result.get('success', False):
                 state["todo_jira_issues"] = jira_result['issues']
                 state["current_issue_index"] = 0
-                log_activity(f"Found {len(state['todo_jira_issues'])} TODO issues", thread_id)
+                todo_count = len(state['todo_jira_issues'])
+                log_activity(f"Found {todo_count} TODO issues", thread_id)
+
+                # Initialize pending_tasks with the TODO count from JIRA
+                core.router.pending_tasks = todo_count
+                core.router.processing_stats['tasks_pending'] = todo_count
+                log_activity(f"Initialized pending tasks count: {todo_count}", thread_id)
             else:
                 state["error"] = f"TODO issues fetch failed: {jira_result.get('error', 'Unknown error')}"
 
@@ -114,10 +120,8 @@ class WorkflowNodes:
         log_activity(f"Processing TODO issue: {current_issue['key']} - {current_issue['summary']}", thread_id)
         core.router.safe_stats_update({'issues_processed': 1})
 
-        # Increment pending tasks when starting an issue
-        with core.router.stats_lock:
-            core.router.pending_tasks += 1
-            core.router.processing_stats['tasks_pending'] = core.router.pending_tasks
+        # Note: pending_tasks is already initialized with TODO count from JIRA
+        # No need to increment again here
 
         # Transition to In Progress
         if transition_issue(current_issue['key'], 'Start Progress', thread_id):
@@ -671,6 +675,12 @@ class WorkflowNodes:
                 core.router.safe_stats_update({'code_prs_created': 1})
                 log_activity(f"GitHub PR created/updated successfully: {pr_url}", thread_id)
 
+                # Decrement pending tasks since this task completed successfully
+                with core.router.stats_lock:
+                    if core.router.pending_tasks > 0:
+                        core.router.pending_tasks -= 1
+                        core.router.processing_stats['tasks_pending'] = core.router.pending_tasks
+
                 # Transition to Done
                 if transition_issue(current_issue['key'], 'Done', thread_id):
                     log_activity(f"Transitioned {current_issue['key']} to Done", thread_id)
@@ -682,7 +692,7 @@ class WorkflowNodes:
                 core.router.safe_activity_log({
                     "id": str(uuid.uuid4()),
                     "timestamp": datetime.now().isoformat(),
-                    "agent": "GitHubAgent",  # FIXED: Changed from TaskAgent to GitHubAgent for PR creation
+                    "agent": "GitHubAgent",
                     "action": "PR Created",
                     "details": f"Created/updated PR for {current_issue['key']}: {pr_url}",
                     "status": "success",
@@ -691,6 +701,13 @@ class WorkflowNodes:
             else:
                 log_activity("GitHub PR creation failed - continuing without PR", thread_id)
                 self.update_mongodb_after_pr(state, thread_id, success=False)
+
+                # Decrement pending tasks and increment failed tasks
+                with core.router.stats_lock:
+                    if core.router.pending_tasks > 0:
+                        core.router.pending_tasks -= 1
+                        core.router.processing_stats['tasks_pending'] = core.router.pending_tasks
+                    core.router.processing_stats['tasks_failed'] += 1
 
             state["current_issue_index"] = state.get("current_issue_index", 0) + 1
             return state
@@ -726,9 +743,8 @@ class WorkflowNodes:
                 log_activity(f"SonarQube analysis completed: Score {sonarqube_result.get('overall_score', 0.0)}",
                              thread_id)
 
-                performance_tracker.increment_daily_metrics({
-                    "code_quality_score": sonarqube_result.get('overall_score', 0.0)
-                })
+                # NOTE: SonarQube score is stored in update_daily_metrics_after_pr at workflow end
+                # We don't update here to avoid double counting or incorrect averaging
 
                 score = sonarqube_result.get('overall_score', 0.0)
                 core.router.safe_stats_update({
@@ -811,6 +827,10 @@ class WorkflowNodes:
     def update_mongodb_after_pr(self, state: 'RouterState', thread_id: str, success: bool = True):
         """Update MongoDB with daily metrics after PR creation"""
         try:
+            # FIXED: Developer count includes initial + rebuild attempts
+            # Reviewer is always 1 per workflow (not counting rebuild reviews separately)
+            developer_task_count = 1 + state.get("rebuild_attempts", 0)
+
             agent_metrics = {
                 "PlannerAgent": {
                     "Task_completed": 1,
@@ -823,12 +843,12 @@ class WorkflowNodes:
                     "tokens_used": state.get("assembler_tokens", 0)
                 },
                 "DeveloperAgent": {
-                    "Task_completed": 1,
+                    "Task_completed": developer_task_count,  # FIXED: 1 initial + rebuilds
                     "LLM_model_used": os.getenv("DEVELOPER_LLM_MODEL", "unknown"),
                     "tokens_used": state.get("developer_tokens", 0)
                 },
                 "ReviewerAgent": {
-                    "Task_completed": 1,
+                    "Task_completed": 1,  # FIXED: Always 1 per workflow
                     "LLM_model_used": os.getenv("REVIEWER_LLM_MODEL", "unknown"),
                     "tokens_used": state.get("reviewer_tokens", 0)
                 }

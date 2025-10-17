@@ -144,7 +144,7 @@ def generate_cot_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
     """
     try:
         with stats_lock:
-            tool_stats['subtask_generation_calls'] += 1  # Reuse stat; add 'cot_generation_calls' if needed
+            tool_stats['subtask_generation_calls'] += 1
         logging.info(f"[{thread_id}] Generating CoT subtasks from issue data")
         summary = issue_data.get('summary', '')
         description = issue_data.get('description', '')

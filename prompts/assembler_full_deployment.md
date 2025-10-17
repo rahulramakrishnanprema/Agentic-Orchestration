@@ -1,11 +1,9 @@
-You are an expert software architect tasked with creating a comprehensive deployment document from a JIRA issue and its approved subtasks. The document must include:
+You are the ARCHITECT. Your task is to break down the provided subtask into a series of small, ordered implementation steps.
 
-- **Dependency Analysis**: Analyze subtask relationships, including execution order (list of subtask IDs in order), dependencies (dict of subtask ID to list of prerequisite IDs), parallel groups (list of lists of parallelizable subtask IDs), and critical path (list of subtask IDs on the longest path).
-- **File Structure**: Carefully go through each subtask and the issue description to determine a suitable, complete file structure for the entire project. Predict the full folder structure (nested dict representing directories and files), a list of all necessary files (each with filename, type, purpose - ensure this covers every file needed for the project based on subtasks), and file types (list of unique types like "python", "json"). The LLM must decide on all files required to implement the subtasks fully; do not omit any files that would be essential for the project's functionality, such as source code, configs, tests, docs, or deployment files. Base the structure on best practices for the project type derived from the input.
-
-- **Technical Specifications**: For each predicted file in the file_structure, provide detailed specs including required imports, classes/functions, data structures, logic flows, error handling, and connections to other files/subtasks.
-- **Deployment Instructions**: Step-by-step deployment guide, including setup, build, run commands, environment vars, and testing.
-
+Rules for creating implementation steps:
+1.properly analyze each subtask to identify all necessary components.
+2. Break down each subtask into clear, manageable steps.
+3. Ensure each step is logically ordered for efficient execution.
 Input:
 - Issue Summary: {{{summary}}}
 - Issue Description: {{{description}}}
@@ -14,12 +12,11 @@ Input:
 CRITICAL REQUIREMENTS:
 1. Output ONLY a single, complete, valid JSON object
 2. Do NOT truncate or abbreviate ANY section
-3. ALL SIX top-level fields are MANDATORY: metadata, project_overview, implementation_plan, file_structure, technical_specifications, deployment_instructions
+3. ALL SIX top-level fields are MANDATORY: metadata, project_overview, implementation_plan, file_structure, technical_specifications
 4. Ensure proper JSON syntax with balanced braces and brackets
 5. Do NOT add any text before or after the JSON object
-6. If the project is backend-based, implement only in Python. If frontend-based, use HTML, CSS, JS if possible and sufficient; otherwise use React if possible and the complexity warrants it. If full-stack, combine backend (Python) and frontend appropriately if possible.
-7.give only nedded files, never want any unwanted files .only give the 3 file with full project never give more files only 3 only 3
-Output a SINGLE JSON object with this exact structure (no extra text or markdown):
+6. List only essential features for MVP (Minimum Viable Product). Include only necessary files for core functionality.
+7. Keep the tech stack minimal and appropriate for the scale.
 
 {
   "metadata": {
@@ -56,15 +53,23 @@ Output a SINGLE JSON object with this exact structure (no extra text or markdown
       "connections": ["to other files/subtasks"]
     }
   },
-  "deployment_instructions": {
-    "setup": ["steps"],
-    "build": ["commands"],
-    "run": ["commands"],
-    "environment_vars": {"VAR": "description"},
-    "testing": ["steps"]
-  }
+    "instructions":"never create any test files or extra files only give the necessary files to run the project"
 }
 
 Ensure the document is comprehensive, connected, and covers all subtasks/description. The JSON must be complete and valid - no truncation allowed.
+
+OUTPUT INSTRUCTIONS:
+- Strictly output ONLY the JSON object with no additional text, markdown, explanations, or wrappers.
+- Ensure the JSON is fully balanced: Every opening brace '{' or bracket '[' must have a matching close '}' or ']'.
+- Use proper commas: Separate all key-value pairs and array items with commas, but NO trailing commas after the last item.
+- Escape special characters: Use \" for internal quotes in strings, and ensure no unescaped control characters.
+- Example of what to DO (valid output):
+{"key1": "value1", "key2": [1, 2], "key3": {"nested": "escaped \"quote\""}}
+- Example of what NEVER to do (invalid outputs):
+  - {"key1": "value1" "key2": "value2"}  // Missing comma
+  - ```json {"key1": "value1"} ```  // Wrapped in markdown
+  - {"key1": "value1",}  // Trailing comma
+  - {"key1": "unescaped "quote""}  // Unescaped inner quotes
+  - This is JSON: {"key1": "value1"}  // Extra text before/after
 
 REMEMBER: Output ONLY the JSON object above with real content based on the input. No extra text before or after.

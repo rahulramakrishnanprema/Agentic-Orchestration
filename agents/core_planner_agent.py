@@ -151,12 +151,12 @@ class CorePlannerAgent:
                 description=issue_data.get('description')
             )
 
-            from services.llm_service import call_llm  # Assume this is your LLM call
+            from services.llm_service import call_llm
             response, tokens = call_llm(formatted_prompt, agent_name="planner")
-            from tools.planner_tools import parse_json_from_text  # Reuse parser
+            from tools.planner_tools import parse_json_from_text
             decision = parse_json_from_text(response)
 
-            method = decision.get("method", "GOT")  # Default to GOT if invalid
+            method = decision.get("method", "GOT")
             reasoning = decision.get("reasoning", "")
 
             logger.info(f"[CORE-PLANNER-{thread_id}] Decided on {method}: {reasoning}")
@@ -184,11 +184,22 @@ class CorePlannerAgent:
 
             return {
                 "planning_method": method,
-                "tokens_used": state.get("tokens_used", 0) + tokens
+                "tokens_used": state.get("tokens_used", 0) + tokens,
+                # CRITICAL: Pass through content and context to next nodes!
+                "content": state.get("content"),
+                "context": state.get("context"),
+                "thread_id": state.get("thread_id")
             }
         except Exception as e:
             logger.error(f"[CORE-PLANNER-{thread_id}] Decision failed: {e}")
-            return {"planning_method": "GOT", "error": str(e)}  # Default to GOT on error
+            return {
+                "planning_method": "GOT",
+                "error": str(e),
+                # Pass through state even on error
+                "content": state.get("content"),
+                "context": state.get("context"),
+                "thread_id": state.get("thread_id")
+            }
 
     def _generate_cot_subtasks_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Generate subtasks using CoT"""

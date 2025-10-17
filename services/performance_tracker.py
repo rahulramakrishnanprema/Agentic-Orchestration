@@ -29,15 +29,32 @@ class MongoPerformanceTracker:
             if not self.connection_string:
                 return
 
-            self.client = MongoClient(self.connection_string)
+            # Enhanced connection with better timeout and retry settings for replica sets
+            self.client = MongoClient(
+                self.connection_string,
+                serverSelectionTimeoutMS=30000,  # Increased to 30 seconds
+                connectTimeoutMS=20000,  # 20 seconds connection timeout
+                socketTimeoutMS=20000,  # 20 seconds socket timeout
+                retryWrites=True,
+                retryReads=True,
+                readPreference='primaryPreferred',  # Try primary, fall back to secondary
+                maxPoolSize=50,
+                minPoolSize=10
+            )
             self.db = self.client[self.database_name]
             self.collection = self.db[self.collection_name]
 
-            # Test connection
-            self.client.admin.command('ping')
-            logger.info("MongoDB Performance Tracker connected successfully")
+            # Test connection with retry
+            try:
+                self.client.admin.command('ping')
+                logger.info("MongoDB Performance Tracker connected successfully")
+            except Exception as ping_error:
+                logger.warning(f"MongoDB ping failed but continuing: {ping_error}")
+                # Don't fail completely, just log warning
+
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
+            logger.info("Continuing without MongoDB - data will not be persisted")
             self.client = None
             self.db = None
             self.collection = None
@@ -122,13 +139,18 @@ class MongoPerformanceTracker:
                 if doc:
                     # Calculate success rate from real data
                     success_rate = self.calculate_success_rate(doc)
+                    # Ensure code_quality_scores is properly formatted as percentage out of 100
+                    code_quality = round(doc.get("code_quality_scores", 0.0), 1)
+                    # Ensure it's within 0-100 range
+                    code_quality = max(0.0, min(100.0, code_quality))
+
                     formatted_item = {
                         "date": date_str,
                         "tasks": doc.get("tasks_completed", 0),
                         "pullRequests": doc.get("pull_requests_created", 0),
                         "tokensUsed": doc.get("tokens_consumed", 0),
                         "successRate": success_rate,
-                        "sonarScore": doc.get("code_quality_scores", 0),
+                        "sonarScore": code_quality,  # Now properly formatted as 0-100 percentage
                         "agent_activities": self.normalize_agent_activities(doc.get("agent_activities", {}), all_agents)
                     }
                 else:

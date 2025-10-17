@@ -50,6 +50,53 @@ def update_mcp_stats(key: str, value: int = 1) -> None:
             mcp_stats[key] += value
 
 
+def extract_text_from_adf(adf_content: dict) -> str:
+    """
+    Extract plain text from Atlassian Document Format (ADF).
+    ADF is a JSON structure used by newer Jira instances.
+
+    Args:
+        adf_content: Dictionary containing ADF structure
+
+    Returns:
+        Plain text extracted from ADF
+    """
+    if not isinstance(adf_content, dict):
+        return str(adf_content)
+
+    text_parts = []
+
+    def extract_text_recursive(node):
+        """Recursively extract text from ADF nodes"""
+        if isinstance(node, dict):
+            # Extract text from text nodes
+            if node.get('type') == 'text':
+                text_parts.append(node.get('text', ''))
+
+            # Process content array
+            if 'content' in node:
+                for child in node['content']:
+                    extract_text_recursive(child)
+
+            # Add spacing for certain node types
+            if node.get('type') in ['paragraph', 'heading', 'listItem']:
+                text_parts.append('\n')
+
+        elif isinstance(node, list):
+            for item in node:
+                extract_text_recursive(item)
+
+    extract_text_recursive(adf_content)
+
+    # Join and clean up the text
+    result = ''.join(text_parts).strip()
+    # Remove excessive newlines
+    while '\n\n\n' in result:
+        result = result.replace('\n\n\n', '\n\n')
+
+    return result
+
+
 def get_jira_client() -> JIRA:
     """Create and return a JIRA client instance"""
     if not all([config.JIRA_SERVER, config.JIRA_EMAIL, config.JIRA_TOKEN]):
@@ -105,10 +152,32 @@ def get_project_issues_mcp_tool(thread_id: str) -> Dict[str, Any]:
             parsed_issues: List[Dict[str, Any]] = []
             for issue in issues:
                 try:
+                    # Extract description with proper handling for different Jira formats
+                    raw_description = getattr(issue.fields, 'description', None)
+
+                    # DEBUG: Log raw description to see what format Jira is returning
+                    logger.info(f"{log_prefix} DEBUG - Issue {issue.key} raw description type: {type(raw_description)}")
+                    logger.info(f"{log_prefix} DEBUG - Issue {issue.key} raw description: {str(raw_description)[:200] if raw_description else 'NULL/NONE'}")
+
+                    # Handle different Jira description formats
+                    description = ''
+                    if raw_description is None:
+                        description = ''
+                    elif isinstance(raw_description, str):
+                        # Plain text description
+                        description = raw_description
+                    elif isinstance(raw_description, dict):
+                        # Atlassian Document Format (ADF) - extract text content
+                        description = extract_text_from_adf(raw_description)
+                        logger.info(f"{log_prefix} DEBUG - Extracted from ADF: {description[:200]}")
+                    else:
+                        # Fallback: convert to string
+                        description = str(raw_description)
+
                     issue_data = {
                         'key': issue.key,
                         'summary': getattr(issue.fields, 'summary', '') or '',
-                        'description': getattr(issue.fields, 'description', '') or '',
+                        'description': description,
                         'status': getattr(issue.fields.status, 'name', 'Unknown') if hasattr(issue.fields,
                                                                                              'status') else 'Unknown',
                         'priority': getattr(issue.fields.priority, 'name', 'None') if hasattr(issue.fields,
@@ -205,10 +274,27 @@ def get_todo_issues_mcp_tool(thread_id: str) -> Dict[str, Any]:
             parsed_issues: List[Dict[str, Any]] = []
             for issue in issues:
                 try:
+                    # Extract description with proper handling for different Jira formats
+                    raw_description = getattr(issue.fields, 'description', None)
+
+                    # Handle different Jira description formats
+                    description = ''
+                    if raw_description is None:
+                        description = ''
+                    elif isinstance(raw_description, str):
+                        # Plain text description
+                        description = raw_description
+                    elif isinstance(raw_description, dict):
+                        # Atlassian Document Format (ADF) - extract text content
+                        description = extract_text_from_adf(raw_description)
+                    else:
+                        # Fallback: convert to string
+                        description = str(raw_description)
+
                     issue_data = {
                         'key': issue.key,
                         'summary': getattr(issue.fields, 'summary', '') or '',
-                        'description': getattr(issue.fields, 'description', '') or '',
+                        'description': description,
                         'status': getattr(issue.fields.status, 'name', 'Unknown') if hasattr(issue.fields,
                                                                                              'status') else 'Unknown',
                         'priority': getattr(issue.fields.priority, 'name', 'None') if hasattr(issue.fields,

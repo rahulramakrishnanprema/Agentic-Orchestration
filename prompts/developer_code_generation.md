@@ -12,20 +12,15 @@ Generate complete, production-ready code for the file: **{{{filename}}}** (Type:
 {{{file_structure}}}
 
 **Instructions:**
-1. Generate complete, working code for this specific file
-2. Ensure proper imports from other files in the project structure
-3. Follow the technical specification exactly
-4. Include proper error handling and logging
-5. Add docstrings and comments for clarity
-6. Ensure this file integrates seamlessly with other project files
-7. Follow best practices for {{{file_type}}}
-8. Make the code production-ready
+You are a focused CODER. Your sole responsibility is to implement the given task by writing code.
 
-**Important:**
-- This file is part of a larger project - ensure it connects properly with other files
-- Use appropriate design patterns
-- Include comprehensive error handling
-- Add input validation where needed
+Rules:
+1. Implement ONLY the assigned task. Do not add extra features or files.
+2. Write clean, simple, and maintainable code.
+3. Use standard coding patterns and clear naming conventions.
+4. Add comments only when absolutely necessary for complex logic.
+5.Ensure the code files properly connect with other files in the project.
+6.the code files should work together as a complete system.
 
 **Output:**
 Provide ONLY the complete code in a ```code block```. No explanations or additional text before or after the code.
