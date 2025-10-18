@@ -1,3 +1,4 @@
+# C:\Users\Rahul\Agent-flow\agents\core_developer_agent.py
 """
 Core Developer Agent - Modular and Reusable
 This is a standalone developer that can be integrated into any workflow.
@@ -37,14 +38,7 @@ class CoreDeveloperAgent:
         from tools.prompt_loader import PromptLoader
         self.prompt_loader = PromptLoader("prompts")
 
-        # Global Project Memory - reusable across all workflows
-        self.global_project_memory = {
-            "all_generated_files": {},  # filename -> {"metadata": {}, "content": str}
-            "file_relationships": {},  # filename -> list of imported/referenced files
-            "cumulative_mistakes": [],  # list of unique mistakes
-            "resolved_mistakes": [],  # list of resolved mistakes
-            "issue_history": []  # list of processed issue keys
-        }
+        # NEW: Remove global_project_memory init - now handled by LangGraph checkpointer in the graph
 
         # Build the graph
         from graph.developer_graph import build_developer_graph
@@ -90,24 +84,39 @@ class CoreDeveloperAgent:
             from graph.developer_graph import DeveloperState
 
             # Prepare initial state (WITHOUT review_queue - it cannot be serialized)
+            # NEW: Remove manual memory copy - LangGraph checkpointer handles persistence
+            # Provide defaults for memory fields to avoid KeyErrors
             initial_state = DeveloperState(
                 deployment_document=deployment_document,
                 thread_id=thread_id,
                 generated_files={},
                 feedback=feedback,
                 error="",
-                global_project_memory=self.global_project_memory.copy(),
+                global_project_memory={
+                    "all_generated_files": {},  # Default empty dict
+                    "file_relationships": {},  # Default empty dict
+                    "cumulative_mistakes": [],  # Default empty list
+                    "resolved_mistakes": [],  # Default empty list
+                    "issue_history": []  # Default empty list
+                },
                 related_files={},
                 current_iteration_feedback=[],
                 issue_data=issue_data,
-                persistent_memory=self.global_project_memory.copy(),
+                persistent_memory={
+                    "all_generated_files": {},  # Default empty dict
+                    "file_relationships": {},  # Default empty dict
+                    "cumulative_mistakes": [],  # Default empty list
+                    "resolved_mistakes": [],  # Default empty list
+                    "issue_history": []  # Default empty list
+                },
                 memory_updated=False,
                 tokens_used=0,
                 files_to_generate=[]
             )
 
-            # Execute the graph
-            final_state = self.graph.invoke(initial_state)
+            # Execute the graph with configurable for memory isolation
+            # NEW: Pass configurable with thread_id for LangGraph memory
+            final_state = self.graph.invoke(initial_state, {"configurable": {"thread_id": thread_id}})
 
             # Check for errors
             if final_state.get("error"):
@@ -118,9 +127,8 @@ class CoreDeveloperAgent:
                     "tokens_used": final_state.get("tokens_used", 0)
                 }
 
-            # Update persistent memory
-            if final_state.get("memory_updated"):
-                self.global_project_memory = final_state.get("persistent_memory", self.global_project_memory)
+            # NEW: No need to update persistent_memory manually - checkpointer already saved it
+            # Access from final_state if needed: self.global_project_memory = final_state.get("persistent_memory", {})
 
             generated_files = final_state.get("generated_files", {})
 
@@ -220,26 +228,17 @@ class CoreDeveloperAgent:
 
     def get_memory_snapshot(self) -> Dict[str, Any]:
         """Get current state of project memory"""
-        return self.global_project_memory.copy()
+        # NEW: With checkpointer, memory is per-thread; this method may need adaptation for specific thread_id
+        # For simplicity, return empty or implement query if needed
+        logger.warning("get_memory_snapshot not fully supported with checkpointer - use graph state query")
+        return {}
 
     def update_memory(self, memory_update: Dict[str, Any]):
         """Update project memory with new information"""
-        for key, value in memory_update.items():
-            if key in self.global_project_memory:
-                if isinstance(value, dict):
-                    self.global_project_memory[key].update(value)
-                elif isinstance(value, list):
-                    self.global_project_memory[key].extend(value)
-                else:
-                    self.global_project_memory[key] = value
+        # NEW: Manual update not needed with checkpointer; log warning or remove method
+        logger.warning("update_memory deprecated with LangGraph checkpointer - use state updates in graph")
 
     def reset_memory(self):
         """Reset project memory to initial state"""
-        self.global_project_memory = {
-            "all_generated_files": {},
-            "file_relationships": {},
-            "cumulative_mistakes": [],
-            "resolved_mistakes": [],
-            "issue_history": []
-        }
-        logger.info("Core Developer memory reset")
+        # NEW: To reset, clear checkpointer data or use new thread_id
+        logger.info("Reset not directly supported - use new thread_id for fresh state")

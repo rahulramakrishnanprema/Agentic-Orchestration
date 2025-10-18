@@ -1,3 +1,4 @@
+# C:\Users\Rahul\Agent-flow\agents\developer_agent.py
 """
 Developer Agent - Backward Compatible Wrapper
 This file maintains backward compatibility with the existing project.
@@ -40,7 +41,8 @@ class DeveloperAgent:
 
         # For backward compatibility - expose the graph and memory
         self.graph = self.core_developer.graph
-        self.global_project_memory = self.core_developer.global_project_memory
+        # NEW: Remove global_project_memory exposure - now managed by checkpointer
+        # self.global_project_memory = self.core_developer.global_project_memory  # Comment out or remove
 
         # Legacy attributes for compatibility
         from tools.prompt_loader import PromptLoader
@@ -131,8 +133,8 @@ class DeveloperAgent:
                     thread_id=thread_id
                 )
 
-            # Update local memory reference for backward compatibility
-            self.global_project_memory = self.core_developer.global_project_memory
+            # NEW: Remove manual memory update - handled by LangGraph checkpointer
+            # self.global_project_memory = self.core_developer.global_project_memory  # Comment out or remove
 
             return result
 

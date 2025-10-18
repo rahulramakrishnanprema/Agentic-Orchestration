@@ -3,6 +3,8 @@ from typing import Dict, Any, List, Optional, TypedDict, Annotated
 import re
 from langgraph.graph import StateGraph, START, END
 from langgraph.constants import Send
+from langgraph.checkpoint.memory import MemorySaver  # NEW: Import for LangGraph memory checkpointer
+
 from tools.developer_tool import correct_code_with_feedback, save_files_locally
 from tools.prompt_loader import PromptLoader
 from tools.utils import log_activity
@@ -117,7 +119,6 @@ def _route_to_file_generation(state: DeveloperState) -> List[Send]:
 def _merge_generated_files_node(state: DeveloperState) -> Dict[str, Any]:
     """Fan-in: Merge generated files and proceed to memory update."""
     save_files_locally(state['generated_files'], state['issue_data'].get('key', 'UNKNOWN'))
-
 
     return state
 
@@ -288,4 +289,7 @@ def build_developer_graph():
                                 {"success": "compile_results", "error": "handle_error"})
     graph.add_edge("compile_results", END)
     graph.add_edge("handle_error", END)
-    return graph.compile()
+
+    # NEW: Compile with LangGraph memory checkpointer for automatic state persistence
+    checkpointer = MemorySaver()  # In-memory saver; use AsyncSqliteSaver for persistent DB if needed
+    return graph.compile(checkpointer=checkpointer)
