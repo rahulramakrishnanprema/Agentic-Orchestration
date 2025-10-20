@@ -540,14 +540,22 @@ class WorkflowNodes:
 
                 # Track reviewer score for averaging
                 review_score = review_result.get('overall_score', 0.0)
-                core.router.safe_stats_update({
-                    'successful_reviews': 1,
+                is_approved = review_result.get('approved', False)
+
+                # Base stats for completed reviews
+                stats_update = {
                     'reviewer_generations': 1,
                     'reviewer_tasks_completed': 1,
                     'tasks_completed': 1,
                     'total_review_scores': review_score,
                     'review_score_count': 1
-                })
+                }
+
+                # Only increment successful_reviews (PR Accepted) if the review is approved
+                if is_approved:
+                    stats_update['successful_reviews'] = 1
+
+                core.router.safe_stats_update(stats_update)
 
                 # Calculate average review score
                 with core.router.stats_lock:
@@ -557,7 +565,7 @@ class WorkflowNodes:
                             1
                         )
 
-                status = "success" if review_result.get('approved', False) else "warning"
+                status = "success" if is_approved else "warning"
 
                 # Log: Reviewer Completed with review scores including Pylint
                 core.router.safe_activity_log({

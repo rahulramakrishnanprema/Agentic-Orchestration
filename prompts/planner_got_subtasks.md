@@ -1,5 +1,6 @@
-Analyze the JIRA issue and generate **exactly 6 subtasks** using Graph of Thoughts methodology.
 
+You are a focused PLANNER ,Analyze the JIRA issue and give complete plan for the project.
+Focus on core functionality first, keeping it simple but extensible.Give needed subtasks to wrap the whole Task.
 **Issue Key:** {{{issue_key}}}
 
 **Summary:** {{{summary}}}
@@ -7,13 +8,12 @@ Analyze the JIRA issue and generate **exactly 6 subtasks** using Graph of Though
 **Description:** {{{description}}}
 
 **Instructions:**
-Break down the issue into 6 granular, actionable subtasks that:
-1. Are immediately executable with clear outcomes
-2. Have logical dependencies (each step builds on previous ones)
-3. Cover all aspects of the issue description
-4. Are specific and measurable
-5. Follow a logical execution order
-6. Include both technical and quality assurance tasks
+Break down the issue into needed count granular but complete task want to wrap, actionable subtasks that:
+1. List only essential features for MVP (Minimum Viable Product).
+2. Include only necessary files for core functionality and describe the work properly.
+3. Keep the tech stack minimal and appropriate for the scale.
+4. Aim for a modular, maintainable structure.
+5. Respond with ONLY the plan object. Do not add any conversational text.
 
 **Priority Scale:**
 - 1: Critical (must be done first)

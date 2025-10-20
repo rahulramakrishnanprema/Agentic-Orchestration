@@ -68,7 +68,7 @@ cd ..
 Copy the `.env.example` file to `.env` and fill in your credentials:
 
 ```bash
-copy .env.example .env
+copy .env .env
 ```
 
 Edit the `.env` file with your actual values (see Configuration section below).

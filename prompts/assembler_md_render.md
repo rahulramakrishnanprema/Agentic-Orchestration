@@ -55,4 +55,18 @@ Structure the Markdown as follows:
 - Error Handling: ...
 - Connections: ...
 
+## Deployment Instructions
+### Setup
+- Steps...
+
+### Build
+- Commands...
+
+### Run
+- Commands...
+
+### Environment Variables
+- VAR: Description
+
 Ensure the Markdown is readable, uses proper formatting (bold, lists, code blocks for commands), and covers all JSON data.
+

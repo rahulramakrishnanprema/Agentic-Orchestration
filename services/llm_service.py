@@ -236,8 +236,22 @@ class LLMService:
             }
             extract_content = lambda r: r['candidates'][0]['content']['parts'][0]['text']
             extract_tokens = lambda r: r.get('usageMetadata', {}).get('totalTokenCount', 0)
+        elif "/v1/responses" in self.api_url.lower():
+            # OpenAI Responses API (GPT-5 series) - uses 'input' instead of 'messages'
+            logger.info(f"Using OpenAI Responses API for model: {model}")
+            data = {
+                "model": model,
+                "input": prompt  # Responses API uses 'input' parameter
+            }
+            # Note: Responses API doesn't support max_tokens or temperature parameters
+            # Token limits are controlled by the model itself
+            if max_tokens is not None:
+                logger.warning(f"max_tokens parameter ({max_tokens}) ignored for Responses API - not supported")
+
+            extract_content = lambda r: r['output'][-1]['content'][0]['text'] if 'output' in r and isinstance(r['output'], list) and len(r['output']) > 0 else ''
+            extract_tokens = lambda r: r.get('usage', {}).get('total_tokens', 0)
         else:
-            # OpenAI-compatible format (OpenAI, Groq, OpenRouter, Local LLMs, etc.)
+            # OpenAI-compatible Chat Completions API (OpenAI, Groq, OpenRouter, Local LLMs, etc.)
             # Detect model type for parameter handling
             model_lower = model.lower()
 
@@ -246,9 +260,6 @@ class LLMService:
                 "o1-preview", "o1-mini", "o1",
                 "o3-preview", "o3-mini", "o3"
             ])
-
-            # Check if it's a GPT-5 model - these have temperature restrictions
-            is_gpt5_model = "gpt-5" in model_lower
 
             if is_reasoning_model:
                 # Reasoning models: Use max_completion_tokens, no temperature
@@ -259,16 +270,6 @@ class LLMService:
                 }
                 if max_tokens is not None:
                     data["max_completion_tokens"] = max_tokens
-            elif is_gpt5_model:
-                # GPT-5 models: Use Responses API with 'input' parameter instead of 'messages'
-                logger.info(f"Using GPT-5 variant: {model}. Using Responses API format with 'input' parameter.")
-                data = {
-                    "model": model,
-                    "input": prompt  # GPT-5 uses 'input' instead of 'messages'
-                }
-                if max_tokens is not None:
-                    data["max_tokens"] = max_tokens
-                # Note: GPT-5 uses different response format - will be handled by extract_content
             else:
                 # Standard models: Full parameter support (GPT-4, Groq models, local LLMs, etc.)
                 data = {
@@ -279,14 +280,8 @@ class LLMService:
                 if max_tokens is not None:
                     data["max_tokens"] = max_tokens
 
-            # Define content extraction based on model type
-            if is_gpt5_model:
-                # GPT-5 Responses API format
-                extract_content = lambda r: r['choices'][0]['message']['content'] if 'choices' in r else r.get('output', r.get('response', ''))
-            else:
-                # Standard OpenAI-compatible format
-                extract_content = lambda r: r['choices'][0]['message']['content']
-
+            # Standard OpenAI-compatible format for content extraction
+            extract_content = lambda r: r['choices'][0]['message']['content']
             extract_tokens = lambda r: r.get('usage', {}).get('total_tokens', 0)
 
         # Make the API call to the URL provided in .env
@@ -357,10 +352,49 @@ class LLMService:
         # Extract content and tokens
         try:
             content = extract_content(response_data)
+            # Ensure content is a string
+            if not isinstance(content, str):
+                logger.warning(f"Content is not a string (type: {type(content)}), converting...")
+                content = str(content)
         except Exception as extract_error:
-            logger.warning(f"Content extraction failed: {extract_error}. Using raw response text.")
-            # Fallback: use the raw text if extraction fails
-            content = response_text
+            logger.warning(f"Content extraction failed: {extract_error}. Trying alternative extraction methods...")
+            logger.debug(f"Response data structure: {response_data}")
+
+            # Try multiple extraction methods as fallback
+            content = None
+
+            # Method 1: Direct 'output' field (Responses API)
+            if 'output' in response_data:
+                content = response_data['output']
+
+            # Method 2: 'text' field
+            elif 'text' in response_data:
+                content = response_data['text']
+
+            # Method 3: Standard chat format
+            elif 'choices' in response_data and len(response_data['choices']) > 0:
+                choice = response_data['choices'][0]
+                if 'message' in choice and 'content' in choice['message']:
+                    content = choice['message']['content']
+                elif 'text' in choice:
+                    content = choice['text']
+
+            # Method 4: Gemini format
+            elif 'candidates' in response_data and len(response_data['candidates']) > 0:
+                candidate = response_data['candidates'][0]
+                if 'content' in candidate and 'parts' in candidate['content']:
+                    parts = candidate['content']['parts']
+                    if len(parts) > 0 and 'text' in parts[0]:
+                        content = parts[0]['text']
+
+            # If still no content, use raw response text
+            if content is None:
+                logger.warning("All extraction methods failed. Using raw response text.")
+                content = response_text
+
+            # Ensure content is a string
+            if not isinstance(content, str):
+                content = str(content)
 
         try:
             tokens = extract_tokens(response_data)

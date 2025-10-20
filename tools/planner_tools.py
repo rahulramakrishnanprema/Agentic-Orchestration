@@ -18,6 +18,7 @@ import queue
 from threading import Thread, Lock
 import os
 from tools.prompt_loader import PromptLoader
+from json_repair import repair_json
 
 from config.settings import config as app_config
 from services.llm_service import call_llm
@@ -47,7 +48,7 @@ def initialize_planner_tools(app_config, app_prompt_loader):
 
 
 def parse_json_from_text(text: str) -> Dict:
-    """Parse JSON from text, handling markdown code blocks and other formats."""
+    """Parse JSON from text, handling markdown code blocks and other formats with json_repair fallback."""
     try:
         # Clean the response - remove markdown code blocks if present
         cleaned_text = text.strip()
@@ -63,10 +64,20 @@ def parse_json_from_text(text: str) -> Dict:
         json_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
         if json_match:
             json_str = json_match.group(0)
-            return json.loads(json_str)
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                # Try json_repair as fallback
+                logger.warning(f"Standard JSON parsing failed, attempting repair: {e}")
+                try:
+                    repaired = repair_json(json_str)
+                    return json.loads(repaired)
+                except Exception as repair_error:
+                    logger.error(f"JSON repair also failed: {repair_error}")
+                    raise e
         raise ValueError("No JSON found in response")
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"JSON parsing error: {e}. Response: {text}")
+        logger.error(f"JSON parsing error: {e}. Response: {text[:500]}...")
         raise Exception("JSON parsing failed")
 
 
@@ -100,9 +111,19 @@ def generate_got_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
             if '[' in content:
                 start = content.find('[')
                 end = content.rfind(']') + 1
-                subtasks_data = json.loads(content[start:end])
+                array_str = content[start:end]
+                try:
+                    subtasks_data = json.loads(array_str)
+                except json.JSONDecodeError as e:
+                    # Try json_repair as fallback
+                    logger.warning(f"Array JSON parsing failed, attempting repair: {e}")
+                    repaired = repair_json(array_str)
+                    subtasks_data = json.loads(repaired)
             else:
                 raise Exception("Subtask parsing failed: No array found in response")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {e}. Response: {content[:500]}...")
+            raise Exception(f"Subtask parsing failed: {str(e)}")
         except Exception as e:
             raise Exception(f"Subtask parsing failed: {str(e)}")
 
@@ -164,9 +185,19 @@ def generate_cot_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
             if '[' in content:
                 start = content.find('[')
                 end = content.rfind(']') + 1
-                subtasks_data = json.loads(content[start:end])
+                array_str = content[start:end]
+                try:
+                    subtasks_data = json.loads(array_str)
+                except json.JSONDecodeError as e:
+                    # Try json_repair as fallback
+                    logger.warning(f"Array JSON parsing failed, attempting repair: {e}")
+                    repaired = repair_json(array_str)
+                    subtasks_data = json.loads(repaired)
             else:
                 raise Exception("Subtask parsing failed: No array found in response")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {e}. Response: {content[:500]}...")
+            raise Exception(f"Subtask parsing failed: {str(e)}")
         except Exception as e:
             raise Exception(f"Subtask parsing failed: {str(e)}")
 
