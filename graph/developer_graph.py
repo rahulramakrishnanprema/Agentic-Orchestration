@@ -97,7 +97,19 @@ def generate_file(state: DeveloperState) -> Dict[str, Any]:
     )
 
     content, tokens = call_llm(prompt, agent_name="developer")
-    generated_code = content.strip()
+
+    # NEW: Ensure content is a string before stripping
+    if isinstance(content, list):
+        # Heuristic: join list parts, assuming it's a list of strings
+        logger.warning(f"[DEV-{state['thread_id']}] LLM returned a list for {filename}. Joining parts.")
+        generated_code = "".join(str(item) for item in content).strip()
+    elif isinstance(content, str):
+        generated_code = content.strip()
+    else:
+        # Fallback for unexpected types
+        logger.warning(f"[DEV-{state['thread_id']}] LLM returned unexpected type {type(content)} for {filename}. Converting to string.")
+        generated_code = str(content).strip()
+
 
     # Clean code block if present
     if '```' in generated_code:

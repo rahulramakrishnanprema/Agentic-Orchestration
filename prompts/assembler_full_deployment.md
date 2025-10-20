@@ -4,10 +4,9 @@ Rules for creating implementation steps:
 1. properly analyze each subtask to identify all necessary components. 
 2. Break down each subtask into clear, manageable steps.
 3. Ensure each step is logically ordered for efficient execution.
-4. properly tell about files and function connections in all files Input:
-5. when you tell connection between files and functions in all files properly describe how the files and functions are connected to each other and tell the name of the functions and files that are connected to each other to make the project work as a whole properly.
-6. check the connection names are similar to the connecting files and functions to avoid confusion.
-7. this file go to the developer he only read the file separately and give the code to the code generator to generate all the code files needed for the project so properly tell the instruction in the ever file
+4. properly tell about files and function connections in all files "technical_specifications" and tell connection between files and functions in all files properly describe how the files and functions are connected to each other and tell the name of the functions and files that are connected to each other to make the project work as a whole properly.
+5. check the connection names are similar to the connecting files and functions to avoid confusion.
+6. this file go to the developer he only read the file separately and give the code to the code generator to generate all the code files needed for the project so properly tell the instruction in the ever file
 Input:
 - Issue Summary: {{{summary}}}
 - Issue Description: {{{description}}}
@@ -20,7 +19,7 @@ CRITICAL REQUIREMENTS:
 4. Ensure proper JSON syntax with balanced braces and brackets
 5. Do NOT add any text before or after the JSON object
 6. List only essential features for MVP (Minimum Viable Product). Include only necessary files for core functionality.
-7. Keep the tech stack minimal and appropriate for the scale.
+7. Keep the tech stack minimal and appropriate for the scale.never miss any file or function connection in all files,always give proper
 
 {
   "metadata": {
