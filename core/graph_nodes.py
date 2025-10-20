@@ -542,7 +542,8 @@ class WorkflowNodes:
                 review_score = review_result.get('overall_score', 0.0)
                 is_approved = review_result.get('approved', False)
 
-                # Base stats for completed reviews
+                # Base stats for completed reviews (DON'T increment successful_reviews here)
+                # PR Accepted will be incremented AFTER PR is actually created
                 stats_update = {
                     'reviewer_generations': 1,
                     'reviewer_tasks_completed': 1,
@@ -551,9 +552,10 @@ class WorkflowNodes:
                     'review_score_count': 1
                 }
 
-                # Only increment successful_reviews (PR Accepted) if the review is approved
-                if is_approved:
-                    stats_update['successful_reviews'] = 1
+                # REMOVED: Don't increment successful_reviews here
+                # It will be incremented after PR creation in node_create_code_pr
+                # if is_approved:
+                #     stats_update['successful_reviews'] = 1
 
                 core.router.safe_stats_update(stats_update)
 
@@ -680,8 +682,16 @@ class WorkflowNodes:
             state["code_pr_created"] = pr_created
             state["code_pr_url"] = pr_url
             if pr_created:
+                # First increment Pull Requests count
                 core.router.safe_stats_update({'code_prs_created': 1})
                 log_activity(f"GitHub PR created/updated successfully: {pr_url}", thread_id)
+
+                # THEN increment PR Accepted count (successful_reviews)
+                # This ensures Pull Requests count shows before PR Accepted count
+                review_result = state.get("review_result", {})
+                if review_result.get('approved', False):
+                    core.router.safe_stats_update({'successful_reviews': 1})
+                    log_activity(f"PR approved and accepted for {current_issue['key']}", thread_id)
 
                 # Decrement pending tasks since this task completed successfully
                 with core.router.stats_lock:
