@@ -15,6 +15,7 @@ logs/
 # Data
 data/
 created_project_files/
+deployment_documents/
 # IDE
 .vscode/
 .idea/
