@@ -8,6 +8,7 @@ IMPORTANT: This file is kept for backward compatibility.
 For new workflows, use CoreDeveloperAgent directly from agents.core_developer_agent
 """
 import logging
+import os
 import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional

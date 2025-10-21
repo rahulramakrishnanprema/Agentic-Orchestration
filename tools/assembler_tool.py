@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 from langchain_core.tools import tool
 from datetime import datetime
 import os
+from config.settings import config
 
 from json_repair import repair_json
 from services.llm_service import call_llm
@@ -157,13 +158,13 @@ def generate_deployment_document(
             subtasks_text=subtasks_text
         )
 
-        logger.info(f"[{thread_id}] Calling LLM with max_tokens=32000...")
+        logger.info(f"[{thread_id}] Calling LLM ...")
 
         content, tokens = call_llm(
             prompt,
             agent_name="assembler",
-            max_tokens=32000,
-            temperature=0.2
+            max_tokens=config.ASSEMBLER_LLM_MAX_TOKENS,
+            temperature=config.ASSEMBLER_LLM_TEMPERATURE,
         )
 
         logger.info(f"[{thread_id}] LLM returned {tokens} tokens")
@@ -183,7 +184,7 @@ def generate_deployment_document(
         md_content, md_tokens = call_llm(
             md_prompt,
             agent_name="assembler",
-            max_tokens=4000
+            max_tokens=config.ASSEMBLER_LLM_MAX_TOKENS,
         )
         tokens += md_tokens
 

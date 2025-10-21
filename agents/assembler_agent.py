@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 from pymongo import MongoClient
-
+from config.settings import config
 from tools.assembler_tool import (
     generate_deployment_document  # Only keep this tool
 )

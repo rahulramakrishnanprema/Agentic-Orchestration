@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         className="flex items-center gap-2 mb-8"
       >
         <motion.img
-          whileHover={{ rotate: 360, scale: 1.1 }}
+          whileHover={{ scale: 1.1 }}
           transition={{ duration: 0.6 }}
           src="/src/assets/Aristotlei-logo.png"
           alt="AristotleI Logo" 

@@ -11,6 +11,7 @@ from threading import Lock
 from langchain_core.tools import tool
 import re
 import os
+from config.settings import config
 from tools.prompt_loader import PromptLoader
 from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
 import queue  # NEW: Add import for queue
