@@ -15,14 +15,11 @@ Usage:
     # Returns: {"success": True, "document": {...}, "markdown": "...", "tokens_used": 100}
 """
 import logging
-import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from langgraph.graph import StateGraph, START, END
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class CoreAssemblerAgent:

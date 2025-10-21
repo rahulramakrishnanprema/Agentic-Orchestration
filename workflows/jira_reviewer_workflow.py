@@ -11,17 +11,15 @@ It handles:
 This keeps JIRA-specific logic separate from the core review logic.
 """
 import logging
-import os
 import threading
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from dotenv import load_dotenv
 
 from agents.core_reviewer_agent import CoreReviewerAgent
+from config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class JiraReviewerWorkflow:
@@ -43,7 +41,7 @@ class JiraReviewerWorkflow:
             import uuid
 
             status = "success" if approved else "warning"
-            threshold = getattr(self.config, 'REVIEW_THRESHOLD', 70.0)
+            threshold = app_config.REVIEW_THRESHOLD
 
             core.router.safe_activity_log({
                 "id": str(uuid.uuid4()),

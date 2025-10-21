@@ -18,10 +18,8 @@ Usage:
 import logging
 import threading
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class CoreDeveloperAgent:

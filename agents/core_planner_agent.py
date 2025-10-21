@@ -11,14 +11,13 @@ Usage:
     # Returns: {"success": True, "subtasks": [...], "tokens_used": 100}
 """
 import logging
-import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from langgraph.graph import StateGraph, START, END
-from dotenv import load_dotenv
+
+from config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class CorePlannerState(dict):
@@ -35,8 +34,8 @@ class CorePlannerAgent:
     def __init__(self, config=None):
         """Initialize the core planner"""
         self.config = config or {}
-        self.score_threshold = float(os.getenv("GOT_SCORE_THRESHOLD", "7.0"))
-        self.hitl_timeout = int(os.getenv("HITL_TIMEOUT_SECONDS", "30"))
+        self.score_threshold = app_config.GOT_SCORE_THRESHOLD
+        self.hitl_timeout = app_config.HITL_TIMEOUT_SECONDS
 
         # Lazy import to avoid circular dependencies
         from tools.prompt_loader import PromptLoader

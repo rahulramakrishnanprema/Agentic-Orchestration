@@ -7,15 +7,14 @@ IMPORTANT: This file is kept for backward compatibility.
 For new workflows, use CorePlannerAgent directly from agents.core_planner_agent
 """
 import logging
-import os
 import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
 
 # Import the new modular components
 from agents.core_planner_agent import CorePlannerAgent
 from workflows.jira_planner_workflow import JiraPlannerWorkflow
+from config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +30,8 @@ class PlannerAgent:
 
     def __init__(self, config):
         self.config = config
-        self.config.GOT_SCORE_THRESHOLD = float(os.getenv("GOT_SCORE_THRESHOLD", "7.0"))
-        self.config.HITL_TIMEOUT_SECONDS = int(os.getenv("HITL_TIMEOUT_SECONDS", "30"))
+        self.config.GOT_SCORE_THRESHOLD = app_config.GOT_SCORE_THRESHOLD
+        self.config.HITL_TIMEOUT_SECONDS = app_config.HITL_TIMEOUT_SECONDS
 
         # Initialize modular components
         self.core_planner = CorePlannerAgent(config)
@@ -62,8 +61,7 @@ class PlannerAgent:
         Legacy MongoDB storage method - kept for backward compatibility
         Now delegates to JiraPlannerWorkflow
         """
-        load_dotenv()
-        conn_str = os.getenv("MONGODB_CONNECTION_STRING")
+        conn_str = app_config.MONGODB_CONNECTION_STRING
         if not conn_str:
             logger.warning("MongoDB not available - Skipping planner feedback storage")
             return
@@ -72,8 +70,8 @@ class PlannerAgent:
             from pymongo import MongoClient
 
             mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE", "aristotle_performance")
-            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE", "agent_performance")
+            db_name = app_config.MONGODB_PERFORMANCE_DATABASE
+            coll_name = app_config.MONGODB_AGENT_PERFORMANCE
             mongo_collection = mongo_client[db_name][coll_name]
 
             # Prepare subtasks list

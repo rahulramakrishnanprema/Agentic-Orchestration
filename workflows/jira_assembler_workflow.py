@@ -13,13 +13,12 @@ import logging
 import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 from agents.core_assembler_agent import CoreAssemblerAgent
+from config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class JiraAssemblerWorkflow:
@@ -42,14 +41,14 @@ class JiraAssemblerWorkflow:
     def _initialize_mongodb(self):
         """Initialize MongoDB connection for JIRA feedback storage"""
         try:
-            conn_str = os.getenv("MONGODB_CONNECTION_STRING")
+            conn_str = app_config.MONGODB_CONNECTION_STRING
             if not conn_str:
                 logger.warning("MONGODB_CONNECTION_STRING not set - JIRA assembler storage disabled")
                 return
 
             self.mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_DATABASE", "code_review")
-            coll_name = os.getenv("ASSEMBLER_FEEDBACK", "assembler-documents")
+            db_name = app_config.MONGODB_DATABASE
+            coll_name = app_config.ASSEMBLER_FEEDBACK
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
 
@@ -71,7 +70,7 @@ class JiraAssemblerWorkflow:
                 "deployment_document": deployment_doc,
                 "timestamp": datetime.now(),
                 "date": datetime.now().date().isoformat(),
-                "llm_model": os.getenv("ASSEMBLER_LLM_MODEL", "unknown"),
+                "llm_model": app_config.ASSEMBLER_LLM_MODEL or "unknown",
                 "tokens_used": tokens_used
             }
 
@@ -287,4 +286,3 @@ class JiraAssemblerWorkflow:
             }
 
         return jira_assembler_node
-

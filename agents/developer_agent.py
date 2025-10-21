@@ -8,11 +8,9 @@ IMPORTANT: This file is kept for backward compatibility.
 For new workflows, use CoreDeveloperAgent directly from agents.core_developer_agent
 """
 import logging
-import os
 import threading
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 # Import the new modular components
@@ -70,7 +68,6 @@ class DeveloperAgent:
         Legacy MongoDB storage method - kept for backward compatibility
         Now delegates to JiraDeveloperWorkflow
         """
-        load_dotenv()
         conn_str = os.getenv("MONGODB_CONNECTION_STRING")
         if not conn_str:
             logger.warning("MongoDB not available - Skipping developer feedback storage")

@@ -67,7 +67,7 @@ class LLMService:
         prompt: str,
         agent_name: str = "general",
         max_tokens: Optional[int] = None,
-        temperature: float = 0.3,
+        temperature: Optional[float] = None,
         model: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: float = 2.0
@@ -78,8 +78,8 @@ class LLMService:
         Args:
             prompt: The prompt text to send
             agent_name: Name of the calling agent (for stats and model selection)
-            max_tokens: Maximum tokens to generate (None = no limit)
-            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate (None = use agent config from .env)
+            temperature: Sampling temperature (None = use agent config from .env)
             model: Override model (if None, uses agent-specific model from config)
             max_retries: Number of retry attempts for rate limits
             retry_delay: Base delay between retries (exponential backoff)
@@ -93,6 +93,10 @@ class LLMService:
         if not model_to_use:
             raise ValueError(f"No model configured for agent '{agent_name}'. Check .env file.")
 
+        # Get temperature and max_tokens from agent config if not provided
+        temperature_to_use = temperature if temperature is not None else self._get_agent_temperature(agent_name)
+        max_tokens_to_use = max_tokens if max_tokens is not None else self._get_agent_max_tokens(agent_name)
+
         # Call provider with retries
         for attempt in range(max_retries):
             try:
@@ -101,7 +105,7 @@ class LLMService:
 
                 # Universal provider call - detects format from API URL
                 content, tokens = await self._call_provider(
-                    prompt, model_to_use, max_tokens, temperature
+                    prompt, model_to_use, max_tokens_to_use, temperature_to_use
                 )
 
                 # Update statistics
@@ -145,7 +149,7 @@ class LLMService:
         prompt: str,
         agent_name: str = "general",
         max_tokens: Optional[int] = None,
-        temperature: float = 0.3,
+        temperature: Optional[float] = None,
         model: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: float = 2.0
@@ -188,6 +192,30 @@ class LLMService:
             'sonarqube': config.DEVELOPER_LLM_MODEL  # SonarQube uses developer config
         }
         return model_map.get(agent_name)
+
+    def _get_agent_temperature(self, agent_name: str) -> Optional[float]:
+        """Get temperature setting for specific agent from config"""
+        temperature_map = {
+            'planner': config.PLANNER_LLM_TEMPERATURE,
+            'assembler': config.ASSEMBLER_LLM_TEMPERATURE,
+            'developer': config.DEVELOPER_LLM_TEMPERATURE,
+            'reviewer': config.REVIEWER_LLM_TEMPERATURE,
+            'rebuilder': config.DEVELOPER_LLM_TEMPERATURE,  # Rebuilder uses developer config
+            'sonarqube': config.DEVELOPER_LLM_TEMPERATURE  # SonarQube uses developer config
+        }
+        return temperature_map.get(agent_name)
+
+    def _get_agent_max_tokens(self, agent_name: str) -> Optional[int]:
+        """Get max_tokens setting for specific agent from config"""
+        max_tokens_map = {
+            'planner': config.PLANNER_LLM_MAX_TOKENS,
+            'assembler': config.ASSEMBLER_LLM_MAX_TOKENS,
+            'developer': config.DEVELOPER_LLM_MAX_TOKENS,
+            'reviewer': config.REVIEWER_LLM_MAX_TOKENS,
+            'rebuilder': config.DEVELOPER_LLM_MAX_TOKENS,  # Rebuilder uses developer config
+            'sonarqube': config.DEVELOPER_LLM_MAX_TOKENS  # SonarQube uses developer config
+        }
+        return max_tokens_map.get(agent_name)
 
     async def _call_provider(
         self,
@@ -454,13 +482,14 @@ async def call_llm_async(
     prompt: str,
     agent_name: str = "general",
     max_tokens: Optional[int] = None,
-    temperature: float = 0.3,
+    temperature: Optional[float] = None,
     model: Optional[str] = None
 ) -> Tuple[str, int]:
     """
     Async LLM call with per-agent configuration (creates new service instance per call)
 
     Each call creates its own service instance - fully concurrent, no global state
+    Temperature and max_tokens default to agent-specific values from .env if not provided
     """
     agent_config = get_agent_llm_config(agent_name)
     service = LLMService(agent_config['key'], agent_config['url'])
@@ -474,13 +503,14 @@ def call_llm(
     prompt: str,
     agent_name: str = "general",
     max_tokens: Optional[int] = None,
-    temperature: float = 0.3,
+    temperature: Optional[float] = None,
     model: Optional[str] = None
 ) -> Tuple[str, int]:
     """
     Synchronous LLM call with per-agent configuration (creates new service instance per call)
 
     Each call creates its own service instance - fully concurrent, no global state
+    Temperature and max_tokens default to agent-specific values from .env if not provided
     """
     agent_config = get_agent_llm_config(agent_name)
     service = LLMService(agent_config['key'], agent_config['url'])

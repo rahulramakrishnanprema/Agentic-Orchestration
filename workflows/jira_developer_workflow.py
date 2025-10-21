@@ -12,17 +12,15 @@ It handles:
 This keeps JIRA-specific logic separate from the core development logic.
 """
 import logging
-import os
 import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 from agents.core_developer_agent import CoreDeveloperAgent
+from config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class JiraDeveloperWorkflow:
@@ -45,14 +43,14 @@ class JiraDeveloperWorkflow:
     def _initialize_mongodb(self):
         """Initialize MongoDB connection for JIRA feedback storage"""
         try:
-            conn_str = os.getenv("MONGODB_CONNECTION_STRING")
+            conn_str = app_config.MONGODB_CONNECTION_STRING
             if not conn_str:
                 logger.warning("MONGODB_CONNECTION_STRING not set - JIRA developer storage disabled")
                 return
 
             self.mongo_client = MongoClient(conn_str)
-            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE", "aristotle_performance")
-            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE", "agent_performance")
+            db_name = app_config.MONGODB_PERFORMANCE_DATABASE
+            coll_name = app_config.MONGODB_AGENT_PERFORMANCE
 
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
@@ -74,7 +72,7 @@ class JiraDeveloperWorkflow:
                 "timestamp": datetime.now(),
                 "date": datetime.now().date().isoformat(),
                 "tokens_used": tokens_used,
-                "llm_model": os.getenv("DEVELOPER_LLM_MODEL", "unknown")
+                "llm_model": app_config.DEVELOPER_LLM_MODEL or "unknown"
             }
 
             result = self.mongo_collection.insert_one(document)

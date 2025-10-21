@@ -17,7 +17,6 @@ import subprocess
 import tempfile
 import sys
 from io import StringIO
-from dotenv import load_dotenv
 from tools.prompt_loader import PromptLoader
 from concurrent.futures import ThreadPoolExecutor, as_completed  # NEW: Add imports for parallelism
 import queue  # NEW: Add import for queue
@@ -916,4 +915,3 @@ def get_reviewer_tools_stats() -> Dict[str, Any]:
                 "pylint_integration"
             ]
         }
-

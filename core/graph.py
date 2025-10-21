@@ -3,10 +3,8 @@
 LangGraph Workflow graph.py
 Handles the graph building, nodes, edges, and conditional routing for agent connections.
 """
-import os
 import logging
 from typing import Dict, Any, List, Optional, TypedDict
-from dotenv import load_dotenv
 
 # LangGraph imports
 from langgraph.graph import StateGraph, END
@@ -33,8 +31,6 @@ from tools.utils import log_activity
 
 # Import performance tracker
 from services.performance_tracker import performance_tracker
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,

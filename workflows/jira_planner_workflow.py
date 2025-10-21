@@ -10,17 +10,15 @@ It handles:
 This keeps JIRA-specific logic separate from the core planning logic.
 """
 import logging
-import os
 import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 from agents.core_planner_agent import CorePlannerAgent
+from config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class JiraPlannerWorkflow:
@@ -43,15 +41,15 @@ class JiraPlannerWorkflow:
     def _initialize_mongodb(self):
         """Initialize MongoDB connection for JIRA feedback storage"""
         try:
-            conn_str = os.getenv("MONGODB_CONNECTION_STRING")
+            conn_str = app_config.MONGODB_CONNECTION_STRING
             if not conn_str:
                 logger.warning("MONGODB_CONNECTION_STRING not set - JIRA feedback storage disabled")
                 return
 
             self.mongo_client = MongoClient(conn_str)
             # Use MONGODB_PERFORMANCE_DATABASE and MONGODB_AGENT_PERFORMANCE
-            db_name = os.getenv("MONGODB_PERFORMANCE_DATABASE")
-            coll_name = os.getenv("MONGODB_AGENT_PERFORMANCE")
+            db_name = app_config.MONGODB_PERFORMANCE_DATABASE
+            coll_name = app_config.MONGODB_AGENT_PERFORMANCE
             db = self.mongo_client[db_name]
             self.mongo_collection = db[coll_name]
 
@@ -102,8 +100,8 @@ class JiraPlannerWorkflow:
                     "score_reasoning": subtask.get("score_reasoning", "")
                 })
 
-            # Get threshold for comparison
-            threshold = float(os.getenv("GOT_SCORE_THRESHOLD", "7.0"))
+            # Get threshold from config
+            threshold = app_config.GOT_SCORE_THRESHOLD
 
             # Determine status based on score
             status = "success" if score >= threshold else "warning"
@@ -184,7 +182,7 @@ class JiraPlannerWorkflow:
                 self._store_to_mongodb(
                     issue_key=issue_key,
                     subtasks=subtasks,
-                    model=os.getenv("PLANNER_LLM_MODEL", "unknown"),
+                    model=app_config.PLANNER_LLM_MODEL or "unknown",
                     description=content,
                     score=score,
                     tokens_used=tokens

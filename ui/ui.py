@@ -19,7 +19,6 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 from typing import Dict, List, Any
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 # Import config from settings
@@ -37,8 +36,6 @@ import core.router
 # Global workflow status tracking
 workflow_status = {"agent": None}
 workflow_status_lock = threading.Lock()
-
-load_dotenv()
 
 # Configure logging format
 logging.basicConfig(
@@ -63,6 +60,8 @@ def update_env_file(updates: Dict[str, str]) -> bool:
         True if successful, False otherwise
     """
     try:
+        from dotenv import load_dotenv
+
         env_path = '.env'
         env_vars = {}
         # Read existing .env file if it exists
@@ -91,7 +90,7 @@ def update_env_file(updates: Dict[str, str]) -> bool:
         return False
 
 def get_env_config(keys: List[str]) -> Dict[str, str]:
-    """ Get current values for specific environment variables.
+    """ Get current values for specific environment variables from config.
     Args:
         keys: List of environment variable keys to retrieve
     Returns:
@@ -99,7 +98,8 @@ def get_env_config(keys: List[str]) -> Dict[str, str]:
     """
     result = {}
     for key in keys:
-        result[key] = os.getenv(key, "")
+        # First try to get from config object, then fallback to empty string
+        result[key] = getattr(config, key, "")
     return result
 
 # React Agentic_UI Handler with proper HTTP responses

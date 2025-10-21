@@ -9,16 +9,13 @@ MCP JIRA Client Tool
 """
 
 import logging
-import os
 from typing import Dict, Any, List
 from datetime import datetime
 from threading import Lock
-from dotenv import load_dotenv
 from jira import JIRA, JIRAError
 
 from config.settings import config
 
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(
