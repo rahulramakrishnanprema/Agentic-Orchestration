@@ -1,6 +1,6 @@
-# Agent-Flow: AI-Powered Development Automation System
+# Aristotle-I: Autonomous AI Workflow Platform
 
-An intelligent multi-agent system that automates software development workflows by orchestrating specialized AI agents for planning, development, code review, and quality assurance.
+Aristotle-I is an autonomous AI workflow platform that orchestrates intelligent multi-agent workflows for software development lifecycle automation. The platform features a task management system with intelligent auto allocation, real-time monitoring, and seamless human oversight capabilities.
 
 ## 🚀 Features
 
@@ -14,7 +14,7 @@ An intelligent multi-agent system that automates software development workflows 
 - **JIRA Integration**: Automatically fetches and processes JIRA tickets
 - **GitHub Integration**: Creates branches, commits code, and opens pull requests
 - **SonarQube Integration**: Comprehensive code quality and security scanning
-- **MongoDB Performance Tracking**: Monitors and stores agent performance metrics
+- **Performance Tracking**: Monitors and stores agent performance metrics
 - **React UI**: Modern web interface for system monitoring and configuration
 - **Human-in-the-Loop (HITL)**: Interactive approval process for critical decisions
 - **Flexible LLM Support**: Works with any OpenAI-compatible API (OpenRouter, OpenAI, local models, etc.)
