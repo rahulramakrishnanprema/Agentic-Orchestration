@@ -600,7 +600,7 @@ def start_ui_server():
             name="ReactUIServer"
         )
         ui_server_thread.start()
-        logger.info(f"React Agentic_UI API API server started on http://{config.UI_HOST}:{config.UI_PORT}")
+        logger.info(f"React Agentic_UI API server started on http://{config.UI_HOST}:{config.UI_PORT}")
         logger.info(f"React development server should be running on http://localhost:{config.REACT_DEV_PORT}")
         if performance_tracker is not None:
             logger.info("MongoDB Performance tracking is ACTIVE")
