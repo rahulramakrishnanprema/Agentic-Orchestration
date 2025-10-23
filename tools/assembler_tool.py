@@ -1,4 +1,4 @@
-# C:\Users\Rahul\Agent-flow\tools\assembler_tool.py
+# assembler_tool.py
 """
 Assembler Tools - Creates deployment documents from subtasks
 """
@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 from langchain_core.tools import tool
 from datetime import datetime
 import os
+import re
 from config.settings import config
 
 from json_repair import repair_json
@@ -28,67 +29,100 @@ def initialize_assembler_tools(app_config, app_prompt_loader):
 
 def _extract_json_from_response(content: str, thread_id: str) -> Dict[str, Any]:
     """
-    Extract and parse JSON from LLM response - relies on prompt enforcement for valid JSON
+    Extract and parse JSON from LLM response, finding the JSON block within the text.
     """
     content = content.strip()
-
-    # Log the response for debugging
     logger.info(f"[{thread_id}] Response length: {len(content)} chars")
-    logger.info(f"[{thread_id}] Response starts with: {content[:100]}")
-    logger.info(f"[{thread_id}] Response ends with: ...{content[-100:]}")
 
     # Remove markdown code blocks if present
     if content.startswith('```json'):
-        content = content[7:]
-        logger.info(f"[{thread_id}] Removed ```json prefix")
+        content = content[7:-3].strip() if content.endswith('```') else content[7:].strip()
     elif content.startswith('```'):
-        content = content[3:]
-        logger.info(f"[{thread_id}] Removed ``` prefix")
+        content = content[3:-3].strip() if content.endswith('```') else content[3:].strip()
 
-    if content.endswith('```'):
-        content = content[:-3]
-        logger.info(f"[{thread_id}] Removed ``` suffix")
+    # Use regex to find the JSON object, making it more robust
+    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    if not json_match:
+        logger.error(f"[{thread_id}] No JSON object found in response. Preview: {content[:500]}")
+        raise ValueError("No JSON object found in LLM response.")
 
-    content = content.strip()
-
-    # Check if response looks like markdown instead of JSON
-    if content.startswith('#') or content.startswith('##'):
-        logger.error(f"[{thread_id}] LLM returned Markdown instead of JSON")
-        logger.error(f"[{thread_id}] First 500 chars: {content[:500]}")
-        raise ValueError("LLM returned Markdown format instead of JSON. The prompt instructions were not followed.")
-
-    # Try direct JSON parse
-    if content.startswith('{'):
+    json_str = json_match.group(0)
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.warning(f"[{thread_id}] Initial JSON parse failed: {e}. Attempting repair.")
         try:
-            document = json.loads(content)
-            logger.info(f"[{thread_id}] ✓ Successfully parsed JSON directly")
+            repaired_json_str = repair_json(json_str)
+            document = json.loads(repaired_json_str)
+            logger.info(f"[{thread_id}] ✓ JSON repaired and parsed successfully.")
             return document
-        except json.JSONDecodeError as e:
-            logger.warning(f"[{thread_id}] Initial JSON parse failed: {e} - Attempting repair")
-            # Repair the JSON using json_repair
-            repaired_content = repair_json(content, skip_json_loads=True)  # Fast mode for known invalids
+        except Exception as repair_e:
+            logger.error(f"[{thread_id}] JSON repair also failed: {repair_e}")
+            # Save failed JSON for debugging
             try:
-                document = json.loads(repaired_content)
-                logger.info(f"[{thread_id}] ✓ JSON repaired and parsed successfully")
-                return document
-            except json.JSONDecodeError as repair_e:
-                logger.error(f"[{thread_id}] JSON repair failed: {repair_e}")
-                # Save failed JSON for debugging
-                try:
-                    debug_folder = "debug_json_failures"
-                    os.makedirs(debug_folder, exist_ok=True)
-                    debug_file = os.path.join(debug_folder, f"failed_{thread_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-                    with open(debug_file, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    logger.error(f"[{thread_id}] Failed JSON saved to: {debug_file}")
-                except:
-                    pass
-                raise ValueError(f"Invalid JSON from LLM after repair: {repair_e}. The response must be valid JSON. Check that all braces and brackets are closed properly.")
+                debug_folder = "debug_json_failures"
+                os.makedirs(debug_folder, exist_ok=True)
+                debug_file = os.path.join(debug_folder, f"failed_{thread_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                with open(debug_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                logger.error(f"[{thread_id}] Failed JSON content saved to: {debug_file}")
+            except Exception:
+                pass
+            raise ValueError(f"Invalid JSON from LLM even after repair: {repair_e}")
 
-    # No opening brace found
-    logger.error(f"[{thread_id}] No JSON object found in response")
-    logger.error(f"[{thread_id}] Full response preview: {content[:500]}")
-    raise ValueError("No JSON object found in LLM response. Response must start with {")
+
+def _generate_markdown_from_document(document: Dict[str, Any]) -> str:
+    """
+    Generates a Markdown document from a structured JSON object.
+    """
+    md_parts = []
+
+    # Metadata and Overview
+    metadata = document.get('metadata', {})
+    overview = document.get('project_overview', {})
+    md_parts.append(f"# {overview.get('title', 'Deployment Document')}")
+    md_parts.append(f"**Version:** {metadata.get('version', '1.0')} | **Date:** {metadata.get('generated_at', datetime.now().isoformat())}")
+    md_parts.append("\n## Project Overview")
+    md_parts.append(overview.get('description', 'No description provided.'))
+
+    # Implementation Plan
+    plan = document.get('implementation_plan', {})
+    md_parts.append("\n## Implementation Plan")
+    md_parts.append(plan.get('strategy', 'No strategy provided.'))
+    if plan.get('subtasks'):
+        md_parts.append("\n### Subtasks")
+        for i, task in enumerate(plan['subtasks']):
+            if isinstance(task, dict):
+                md_parts.append(f"{i+1}. **{task.get('title', 'Untitled Task')}**: {task.get('description', 'No description.')}")
+            else:
+                md_parts.append(f"{i+1}. {task}")
+
+    # File Structure
+    file_structure = document.get('file_structure', {})
+    if file_structure.get('files'):
+        md_parts.append("\n## File Structure")
+        md_parts.append("```")
+        for file_info in file_structure['files']:
+            md_parts.append(f"- {file_info.get('path', 'N/A')}: {file_info.get('description', 'No description.')}")
+        md_parts.append("```")
+
+    # Technical Specifications
+    specs = document.get('technical_specifications', {})
+    if specs:
+        md_parts.append("\n## Technical Specifications")
+        if specs.get('technologies'):
+            md_parts.append("- **Technologies:** " + ", ".join(specs['technologies']))
+        if specs.get('system_requirements'):
+            md_parts.append("- **System Requirements:** " + ", ".join(specs['system_requirements']))
+
+    # Deployment Instructions
+    deployment = document.get('deployment_instructions', {})
+    if deployment.get('steps'):
+        md_parts.append("\n## Deployment Instructions")
+        for i, step in enumerate(deployment['steps']):
+            md_parts.append(f"{i+1}. {step}")
+
+    return "\n".join(md_parts)
 
 
 def _validate_document_structure(document: Dict[str, Any], thread_id: str) -> None:
@@ -158,7 +192,7 @@ def generate_deployment_document(
             subtasks_text=subtasks_text
         )
 
-        logger.info(f"[{thread_id}] Calling LLM ...")
+        logger.info(f"[{thread_id}] Calling LLM to generate structured JSON document...")
 
         content, tokens = call_llm(
             prompt,
@@ -167,36 +201,15 @@ def generate_deployment_document(
             temperature=config.ASSEMBLER_LLM_TEMPERATURE,
         )
 
-        logger.info(f"[{thread_id}] LLM returned {tokens} tokens")
+        logger.info(f"[{thread_id}] LLM returned {tokens} tokens for JSON generation.")
 
         # Extract and validate JSON
         document = _extract_json_from_response(content, thread_id)
         _validate_document_structure(document, thread_id)
 
-        # Generate Markdown from validated JSON
-        logger.info(f"[{thread_id}] Generating Markdown documentation...")
-        json_document = json.dumps(document, indent=2)
-        md_prompt = prompt_loader.format(
-            "assembler_md_render",
-            json_document=json_document
-        )
-
-        md_content, md_tokens = call_llm(
-            md_prompt,
-            agent_name="assembler",
-            max_tokens=config.ASSEMBLER_LLM_MAX_TOKENS,
-        )
-        tokens += md_tokens
-
-        # Clean MD content
-        md_content = md_content.strip()
-        if md_content.startswith('```markdown'):
-            md_content = md_content[11:]
-        elif md_content.startswith('```'):
-            md_content = md_content[3:]
-        if md_content.endswith('```'):
-            md_content = md_content[:-3]
-        md_content = md_content.strip()
+        # Generate Markdown from validated JSON locally instead of a second LLM call
+        logger.info(f"[{thread_id}] Generating Markdown documentation from JSON...")
+        md_content = _generate_markdown_from_document(document)
 
         # Store MD locally
         local_folder = "deployment_documents"

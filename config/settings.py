@@ -1,4 +1,4 @@
-# C:\Users\Rahul\Agent-flow\config\settings.py
+# settings.py
 import os
 from dotenv import load_dotenv
 

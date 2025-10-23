@@ -1,4 +1,4 @@
-# C:\Users\Rahul\Agent-flow\tools\planner_tools.py
+# planner_tools.py
 """
 Streamlined Planner Tools - Reduced Code with Full Functionality
 - Uses @tool decorators instead of classes
@@ -44,6 +44,36 @@ def initialize_planner_tools(app_config, app_prompt_loader):
     global config, prompt_loader
     config = app_config
     prompt_loader = app_prompt_loader
+
+
+def _parse_json_array_from_text(text: str) -> List:
+    """Helper to parse a JSON array from text, with fallback to json_repair."""
+    try:
+        # Clean the response - remove markdown code blocks if present
+        cleaned_text = text.strip()
+        if cleaned_text.startswith('```json'):
+            cleaned_text = cleaned_text[7:]
+        elif cleaned_text.startswith('```'):
+            cleaned_text = cleaned_text[3:]
+        if cleaned_text.endswith('```'):
+            cleaned_text = cleaned_text[:-3]
+        cleaned_text = cleaned_text.strip()
+
+        # Find the outermost array
+        start = cleaned_text.find('[')
+        end = cleaned_text.rfind(']') + 1
+        if 0 <= start < end:
+            array_str = cleaned_text[start:end]
+            try:
+                return json.loads(array_str)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Standard JSON array parsing failed, attempting repair: {e}")
+                repaired = repair_json(array_str)
+                return json.loads(repaired)
+        raise ValueError("No JSON array found in response")
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error(f"JSON array parsing error: {e}. Response: {text[:500]}...")
+        raise
 
 
 def parse_json_from_text(text: str) -> Dict:
@@ -104,27 +134,7 @@ def generate_got_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
         )
 
         content, tokens = call_llm(formatted_prompt, agent_name="planner")
-
-        subtasks_data = []
-        try:
-            if '[' in content:
-                start = content.find('[')
-                end = content.rfind(']') + 1
-                array_str = content[start:end]
-                try:
-                    subtasks_data = json.loads(array_str)
-                except json.JSONDecodeError as e:
-                    # Try json_repair as fallback
-                    logger.warning(f"Array JSON parsing failed, attempting repair: {e}")
-                    repaired = repair_json(array_str)
-                    subtasks_data = json.loads(repaired)
-            else:
-                raise Exception("Subtask parsing failed: No array found in response")
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {e}. Response: {content[:500]}...")
-            raise Exception(f"Subtask parsing failed: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Subtask parsing failed: {str(e)}")
+        subtasks_data = _parse_json_array_from_text(content)
 
         graph = nx.DiGraph()
         for item in subtasks_data:
@@ -178,27 +188,7 @@ def generate_cot_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
         )
 
         content, tokens = call_llm(formatted_prompt, agent_name="planner")
-
-        subtasks_data = []
-        try:
-            if '[' in content:
-                start = content.find('[')
-                end = content.rfind(']') + 1
-                array_str = content[start:end]
-                try:
-                    subtasks_data = json.loads(array_str)
-                except json.JSONDecodeError as e:
-                    # Try json_repair as fallback
-                    logger.warning(f"Array JSON parsing failed, attempting repair: {e}")
-                    repaired = repair_json(array_str)
-                    subtasks_data = json.loads(repaired)
-            else:
-                raise Exception("Subtask parsing failed: No array found in response")
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {e}. Response: {content[:500]}...")
-            raise Exception(f"Subtask parsing failed: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Subtask parsing failed: {str(e)}")
+        subtasks_data = _parse_json_array_from_text(content)
 
         # Format as simple list (no graph)
         subtasks_list = []
@@ -221,7 +211,7 @@ def generate_cot_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
 @tool
 def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[str, Any], thread_id: str = "unknown") -> Dict[str, Any]:
     """
-    Score each subtask using LLM evaluation.
+    Score all subtasks using a single batched LLM evaluation for performance.
     Args:
         subtasks_graph: NetworkX graph data of subtasks
         requirements: Project requirements
@@ -230,32 +220,49 @@ def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[s
     try:
         with stats_lock:
             tool_stats['scoring_calls'] += 1
-        logging.info(f"[{thread_id}] Scoring subtasks with LLM")
+        logging.info(f"[{thread_id}] Scoring subtasks with a single batched LLM call")
+
+        subtasks_to_score = [
+            {"id": node_id, "description": node_data["description"]}
+            for node_id, node_data in subtasks_graph.get("nodes", {}).items()
+        ]
+
+        if not subtasks_to_score:
+            return {"success": True, "scored_subtasks": [], "tokens_used": 0}
+
+        formatted_prompt = prompt_loader.format(
+            "planner_batch_subtask_scoring",
+            issue_description=requirements.get('project_description', ''),
+            summary=requirements.get('reasoning', ''),
+            requirements="\n".join(requirements.get('requirements', [])),
+            subtasks_json=json.dumps(subtasks_to_score, indent=2)
+        )
+
+        content, tokens = call_llm(formatted_prompt, agent_name="planner")
+        scores_data = _parse_json_array_from_text(content)
+
+        # Create a lookup for original subtask data
+        original_subtasks = {
+            str(node_id): node_data for node_id, node_data in subtasks_graph.get("nodes", {}).items()
+        }
         scored_subtasks = []
-        total_tokens = 0
-        for node_id, node_data in subtasks_graph.get("nodes", {}).items():
-            formatted_prompt = prompt_loader.format(
-                "planner_subtask_scoring",
-                issue_description=requirements.get('project_description', ''),
-                summary=requirements.get('reasoning', ''),
-                requirements="\n".join(requirements.get('requirements', [])),
-                subtask_description=node_data['description']
-            )
-            content, tokens = call_llm(formatted_prompt, agent_name="planner")
-            total_tokens += tokens
-            score_data = parse_json_from_text(content)
-            scored_subtask = {
-                'id': int(node_id),
-                'description': node_data['description'],
-                'priority': node_data['priority'],
-                'score': float(score_data.get('score', 7.5)),
-                'reasoning': score_data.get('reasoning', ''),
-                'requirements_covered': score_data.get('requirements_covered', node_data.get('requirements_covered', []))
-            }
-            scored_subtasks.append(scored_subtask)
-            logging.info(
-                f"[{thread_id}] Subtask {scored_subtask['id']}: Score {scored_subtask['score']:.1f} - {scored_subtask['description']}")
-        return {"success": True, "scored_subtasks": scored_subtasks, "tokens_used": total_tokens}
+        for score_item in scores_data:
+            subtask_id_str = str(score_item.get('id'))
+            if subtask_id_str in original_subtasks:
+                original_data = original_subtasks[subtask_id_str]
+                scored_subtask = {
+                    'id': int(subtask_id_str),
+                    'description': original_data['description'],
+                    'priority': original_data['priority'],
+                    'score': float(score_item.get('score', 7.5)),
+                    'reasoning': score_item.get('reasoning', ''),
+                    'requirements_covered': score_item.get('requirements_covered', original_data.get('requirements_covered', []))
+                }
+                scored_subtasks.append(scored_subtask)
+                logging.info(
+                    f"[{thread_id}] Subtask {scored_subtask['id']}: Score {scored_subtask['score']:.1f} - {scored_subtask['description']}")
+
+        return {"success": True, "scored_subtasks": scored_subtasks, "tokens_used": tokens}
     except Exception as e:
         with stats_lock:
             tool_stats['errors'] += 1
@@ -290,92 +297,49 @@ def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str,
         )
 
         content, tokens = call_llm(formatted_prompt, agent_name="planner")
-
         logger.info(f"[{thread_id}] Raw LLM response for merging subtasks: {content[:500]}...")
 
-        # Clean the response - remove markdown code blocks if present
-        cleaned_content = content.strip()
-        if cleaned_content.startswith('```json'):
-            cleaned_content = cleaned_content[7:]
-        elif cleaned_content.startswith('```'):
-            cleaned_content = cleaned_content[3:]
-        if cleaned_content.endswith('```'):
-            cleaned_content = cleaned_content[:-3]
-        cleaned_content = cleaned_content.strip()
-
-        # Parse the response more robustly
+        # Use robust parsing functions
         try:
-            if '{"merged_subtasks":' in cleaned_content:
-                data = json.loads(cleaned_content[cleaned_content.find('{'):cleaned_content.rfind('}')+1])
-                merged = data.get('merged_subtasks', [])
-            else:
-                # Fallback to looking for just the array
-                json_start = cleaned_content.find('[')
-                json_end = cleaned_content.rfind(']') + 1
-                if json_start >= 0 and json_end > json_start:
-                    merged = json.loads(cleaned_content[json_start:json_end])
-                else:
-                    logger.error(f"[{thread_id}] No valid JSON structure found in response. Response length: {len(content)}")
-                    logger.error(f"[{thread_id}] Response ends with: ...{content[-200:]}")
-                    raise ValueError("No valid JSON structure found in response - response may be truncated")
-        except json.JSONDecodeError as e:
-            logger.error(f"[{thread_id}] JSON parse error: {str(e)}. Cleaned content length: {len(cleaned_content)}")
-            logger.error(f"[{thread_id}] Content ends with: ...{cleaned_content[-200:]}")
-            raise ValueError(f"Failed to parse merged subtasks (possible truncation): {str(e)}")
+            data = parse_json_from_text(content)
+            merged = data.get('merged_subtasks', [])
+        except Exception:
+            logger.warning(f"[{thread_id}] Parsing as JSON object failed, trying as array.")
+            merged = _parse_json_array_from_text(content)
 
         if not merged:
-            logger.warning(f"[{thread_id}] No merged subtasks generated")
-            raise ValueError("No merged subtasks were generated")
+            raise ValueError("No merged subtasks were generated or parsed from the LLM response.")
 
         # Validate that each merged subtask has required fields
         for i, subtask in enumerate(merged):
             if 'id' not in subtask or 'description' not in subtask:
                 raise ValueError(f"Merged subtask {i+1} missing required fields (id, description)")
 
-        # IMPORTANT: Calculate scores for merged subtasks based on their source subtasks
         # Create a mapping of scored subtasks by ID for quick lookup
         scored_map = {st['id']: st for st in scored_subtasks}
 
         for merged_subtask in merged:
-            # Get the source subtask IDs that were merged into this subtask
             source_ids = merged_subtask.get('merged_from', [])
 
             if source_ids and isinstance(source_ids, list):
-                # Calculate weighted average score from source subtasks
-                total_score = 0.0
-                count = 0
+                total_score, count = 0.0, 0
                 for source_id in source_ids:
                     if source_id in scored_map:
                         total_score += scored_map[source_id].get('score', 0.0)
                         count += 1
-
                 merged_subtask['score'] = round(total_score / count, 1) if count > 0 else 0.0
                 merged_subtask['score_reasoning'] = f"Average of {count} source subtasks"
             else:
-                # If no source IDs, calculate based on priority or default to average
-                # Use the subtask ID to find if it matches any scored subtask
-                matched_score = None
-                for scored_st in scored_subtasks:
-                    if scored_st['description'][:50] in merged_subtask['description'][:100]:
-                        matched_score = scored_st.get('score', 0.0)
-                        break
+                # Fallback score calculation
+                avg_score = sum(st.get('score', 0.0) for st in scored_subtasks) / len(scored_subtasks) if scored_subtasks else 0.0
+                merged_subtask['score'] = round(avg_score, 1)
+                merged_subtask['score_reasoning'] = "Defaulted to average of all subtasks"
 
-                if matched_score is not None:
-                    merged_subtask['score'] = matched_score
-                    merged_subtask['score_reasoning'] = "Matched from original subtask"
-                else:
-                    # Default to average of all scores
-                    avg_score = sum(st.get('score', 0.0) for st in scored_subtasks) / len(scored_subtasks)
-                    merged_subtask['score'] = round(avg_score, 1)
-                    merged_subtask['score_reasoning'] = "Average of all subtasks"
-
-            # Ensure priority is set
             if 'priority' not in merged_subtask:
                 merged_subtask['priority'] = merged_subtask.get('id', 0)
 
             logger.info(f"[{thread_id}] Merged subtask {merged_subtask['id']}: Score {merged_subtask['score']:.1f} - {merged_subtask['description'][:60]}...")
 
-        # Calculate overall score
         overall_score = sum(st.get('score', 0.0) for st in merged) / len(merged) if merged else 0.0
         logger.info(f"[{thread_id}] Successfully merged into {len(merged)} subtasks with overall score: {overall_score:.1f}")
 
