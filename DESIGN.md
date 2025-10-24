@@ -1,160 +1,183 @@
 # System Design: Aristotle-I Agentic System
 
-**Author(s):** Debabrata Das
+**Author:** Debabrata Das  
+**Last Updated:** 2025-10-24  
+**Status:** Draft  
+**Location:** `DESIGN.md`
 
-## 1. Overview
+## Revision History
+- 2025-10-24 — Expanded architecture, security, testing, rollout, metrics, alternatives, and operational playbook.
 
-### 1.1. What is Aristotle-I?
+## Executive Summary
+Aristotle\-I is a multi\-agent, Human\-in\-the\-Loop (HITL) autonomous software engineering assistant. It integrates with Jira, GitHub, and SonarQube and leverages multiple LLMs to automate planning, code generation, review, and documentation while preserving human oversight. This document describes system goals, architecture, data and security models, operational procedures, testing and rollout plans, monitoring, and alternatives.
 
-Aristotle-I is an advanced, multi-agent autonomous software engineering system designed to automate the software development lifecycle (SDLC). It integrates with standard development tools like Jira, GitHub, and SonarQube to manage tasks, source code, and code quality. The system leverages multiple Large Language Models (LLMs) to perform complex tasks such as planning, code generation, code review, and documentation.
+## Goals
+- Automate repetitive SDLC tasks while preserving human control.
+- Increase developer productivity and consistency.
+- Improve code quality using automated reviews and policy enforcement.
+- Produce standardized, traceable documentation for audited changes.
 
-A core design principle is **Human-in-the-Loop (HITL)** collaboration, allowing human developers to supervise, intervene, and guide the agents at any stage.
+## Non\-Goals
+- Replace human architects or project managers.
+- Provision cloud infrastructure, run CI/CD pipelines, or perform deployments.
+- Fully autonomous, unsupervised production commits.
 
-### 1.2. Goals
+## Terminology
+- Agent: A software component that performs a discrete responsibility (Planner, Developer, Reviewer, Assembler).
+- HITL: Human\-in\-the\-Loop — explicit points where a human reviews and approves.
+- LLM Service: Abstraction endpoint that routes prompts to one or more LLM providers.
+- MAX_REBUILD_ATTEMPTS: System threshold to escalate human attention when automated loops fail.
 
-*   **Automate Repetitive Tasks:** Automate the end-to-end process of software development, from task analysis to code implementation and documentation.
-*   **Increase Developer Productivity:** Free up human developers to focus on more complex, high-value architectural and design decisions.
-*   **Facilitate Human-Agent Collaboration:** Enable a seamless partnership where agents handle the heavy lifting and humans provide oversight, feedback, and final approval.
-*   **Improve Code Quality:** Enforce coding standards, security best practices, and completeness through automated, iterative code reviews supervised by humans.
-*   **Standardize Documentation:** Automatically generate consistent and comprehensive technical documentation for all completed work.
+## Use Cases
+1. New Jira issue triggers plan creation; human reviews and approves plan; code is generated and iteratively reviewed.
+2. Existing PR needs automated augmentation and documentation generation.
+3. Codebase-wide refactor suggested by system with human approval and staged execution.
 
-### 1.3. Non-Goals
-
-*   **Full Autonomy without Oversight:** The system is designed to be a powerful assistant, not a "fire-and-forget" solution. Human oversight is a core feature, not an afterthought.
-*   **Infrastructure Management:** This system does not manage or provision cloud infrastructure, CI/CD pipelines, or deployments.
-*   **Project Management:** While it integrates with Jira for task management, it is not a project management tool itself.
-
-## 2. System Architecture
-
-The system employs a modular, agent-based architecture where specialized agents collaborate to complete development tasks. This design promotes separation of concerns, scalability, and maintainability, with clear entry points for human intervention.
-
-### 2.1. Architecture Diagram
+## Architecture Overview
 
 ```mermaid
 graph TD
-    subgraph "Human Actors"
-        User[("User")]
-        HumanDeveloper[("Human Developer")]
-    end
+  subgraph Human
+    HD[Human Developer]
+    User[End User/PM]
+  end
 
-    subgraph "External Systems & Triggers"
-        Jira[("Jira Issue")]
-    end
+  subgraph External
+    Jira[Jira]
+    GitHub[GitHub]
+    Sonar[SonarQube]
+  end
 
-    subgraph "Aristotle-I Agentic Core"
-        direction LR
-        Planner("Planner Agent")
-        Developer("Developer Agent")
-        Reviewer("Reviewer Agent")
-        Assembler("Assembler Agent")
-    end
+  subgraph Core
+    Planner(Planner Agent)
+    Developer(Developer Agent)
+    Reviewer(Reviewer Agent)
+    Assembler(Assembler Agent)
+    LLM(LLM Service)
+    DB[(MongoDB)]
+    KB[(Knowledge Base \(.md files\))]
+  end
 
-    subgraph "Supporting Services & Data Stores"
-        LLM[/"LLM Service"/]
-        MongoDB[("MongoDB")]
-        KnowledgeBase[("Knowledge Base (.md files)")]
-        SonarQube[("SonarQube")]
-        GitHub[("GitHub Repository")]
-    end
+  User -->|Creates Issue| Jira
+  Jira -->|Task Ingestion| Planner
+  Planner -->|Plan| HD
+  HD -->|Approve/Feedback| Planner
+  Planner -->|Approved Plan| Developer
+  Developer -->|Code Changes| GitHub
+  Developer -->|Request Review| Reviewer
+  Reviewer -->|Static Analysis| Sonar
+  Reviewer -->|Consult| KB
+  Reviewer -->|Persist Report| DB
+  Reviewer -- Fail --> Developer
+  Reviewer -- Pass --> Assembler
+  Assembler -->|Docs| KB
+  HD -->|Final Approval| GitHub
+  LLM <-->|Used by| Planner & Developer & Reviewer & Assembler
+```
 
-    subgraph "Outputs"
-        FinalCode("Final Code")
-        FinalDocs("Final Documentation")
-    end
+## Component Breakdown
+- Planner Agent: Creates decomposed, testable tasks and acceptance criteria. Produces plan artifacts for UI review.
+- Developer Agent: Generates and modifies code, tests, and changelogs. Produces commits/PRs to `GitHub`.
+- Reviewer Agent: Runs automated code review using LLM reasoning, rules engines, and SonarQube signals. Produces review reports and remediation suggestions.
+- Assembler Agent: Consolidates design notes, documentation, and changelogs into standardized Markdown artifacts stored in the Knowledge Base.
+- LLM Service: Provider-agnostic prompt orchestration, response sanitization (e.g., `json_repair`), and rate / cost controls.
+- Database (MongoDB): Stores plans, review reports, audit logs, and system state.
+- UI (React): HITL console for plan review, code review, feedback, and approvals.
 
-    UI(("React UI"))
+## Data Model (high level)
+- Task
+  - id, jira_id, status, created_by, assigned_agent, plan_id
+- Plan
+  - id, task_id, steps[], estimated_time, approvals[]
+- ChangeSet / Patch
+  - id, files_changed[], diff, tests_added[]
+- ReviewReport
+  - id, changeset_id, score, issues[], sonar_summary
+- AuditEvent
+  - id, type, actor, timestamp, payload
 
-    %% Main Workflow
-    User -- "Initiates Task" --> Jira
-    Jira -- "1. Task Ingestion" --> Planner
-    Planner -- "2. Create Plan" --> Developer
+## Interfaces & APIs
+- Jira Connector: Ingests webhooks; maps issue fields to Task model.
+- GitHub Connector: Create branches, PRs, comments; minimal PAT scope (repo:status, repo:pull).
+- SonarQube Connector: Fetch static analysis results; influence Reviewer scoring.
+- LLM Service API: Prompt templates, request throttling, provider fallback.
 
-    Developer -- "3. Write/Modify Code" --> GitHub
-    Developer -- "4. Submit for Review" --> Reviewer
+API contract examples (conceptual):
+- POST /api/v1/tasks — create task (from Jira)
+- GET /api/v1/tasks/{id}/plan — retrieve generated plan
+- POST /api/v1/tasks/{id}/plan/approve — human approval
+- POST /api/v1/changesets/{id}/approve — final approval / push
 
-    Reviewer -- "5a. Review Failed (Iterate)" --> Developer
-    Reviewer -- "5b. Review Approved" --> Assembler
+## Security
+- Secrets: No plaintext secrets in repos. Use environment variables for local development and a secrets manager (Vault, AWS Secrets Manager, etc.) in production.
+- GitHub PAT: Least privileges; use short lived tokens where possible.
+- LLM access: Rate limits, usage quotas, and prompt logging; redact PII before logging.
+- Input Sanitization: Sanitize and validate all external inputs (Jira, PR descriptions); apply prompt injection mitigation.
+- Audit & Tamper Evidence: Immutable audit logs for plan approvals and final commits persisted to MongoDB and optionally exported to an SIEM.
+- RBAC: UI roles for Reviewer, Developer, Admin; operations gated by role checks.
 
-    Assembler -- "6. Generate Docs" --> FinalDocs
-    GitHub -- "7. Push Final Code" --> FinalCode
+## Reliability, Resilience & Scalability
+- Stateless Agents: Agents are mostly stateless; state persisted in DB to allow horizontal scaling.
+- Retry & Backoff: Exponential backoff for transient LLM/provider and GitHub errors.
+- Circuit Breaker: Disable automated commit flows on repeated failures and alert humans.
+- Worker Pool: Reviewer processes files in parallel; tune pool size based on CPU & rate limits.
+- Graceful Degradation: If LLM provider fails, switch to fallback and notify humans.
 
-    %% Human-in-the-Loop Interactions via UI
-    HumanDeveloper -- "Reviews Plan" --> Planner
-    HumanDeveloper -- "Provides Feedback/Overrides" --> Developer
-    HumanDeveloper -- "Reviews & Approves Code" --> Reviewer
-    HumanDeveloper -- "Gives Final Approval" --> FinalCode
+## Testing Strategy
+- Unit Tests: Core business logic, prompt templates, response parsing, connectors.
+- Integration Tests: GitHub and Jira mocks; SonarQube integration through test instances.
+- End\-to\-End Tests: Simulate complete workflow from Jira ingestion to final approval in a staging environment.
+- Security Tests: Static Application Security Testing (SAST), dependency scanning, and secret scanning.
+- CI: `pip` and `npm` tasks for Python and front\-end; run tests in PRs and block merges on failures.
 
-    %% Agent Dependencies
-    Planner -- "Uses" --> LLM
-    Developer -- "Uses" --> LLM
-    Reviewer -- "Uses" --> LLM
-    Assembler -- "Uses" --> LLM
+## Monitoring & Observability
+- Metrics:
+  - Task throughput, mean time to approval, average review cycles, LLM usage and cost, failure rates.
+- Logs:
+  - Structured logs (JSON), request traces, LLM prompt/response hashes (not raw content unless redacted).
+- Tracing:
+  - Distributed tracing for agent workflows to measure latency across components.
+- Dashboards & Alerts:
+  - UI dashboard for ongoing tasks, alerts for MAX_REBUILD_ATTEMPTS exceeded, provider outages, and anomalous cost spikes.
 
-    Reviewer -- "Consults" --> KnowledgeBase
-    Reviewer -- "Uses" --> SonarQube
-    Reviewer -- "Persists Results" --> MongoDB
+## Operational Playbook
+- On failed review loop > MAX_REBUILD_ATTEMPTS: Notify on-call, pause pipeline for task, show detailed diff and reviewer reports.
+- On LLM provider outage: Switch to fallback provider; if none available, enter manual mode and notify team.
+- Incident Response: Runbook for credential compromise, data breach, and malicious plan detection.
 
-    %% UI Interaction
-    UI -- "Enables HITL" --> HumanDeveloper
-    HumanDeveloper -- "Monitors & Interacts" --> MongoDB
+## Rollout & Migration Plan
+1. Alpha: Internal-only, limited teams, no automatic commits (human must merge).
+2. Beta: Wider engineering teams, allow automated PR creation, still require human merges.
+3. Controlled Production: Allow selective automatic merges for low-risk changes (docs, tests) with feature flags.
+4. Full Production: Expand scope incrementally and continuously monitor.
 
+## Metrics & Success Criteria
+- 20\% reduction in developer time on routine tasks within 3 months.
+- Mean cycles per task \< 2 for typical features.
+- Review false\-positive rate \< 5\% compared to human reviewers.
+- No critical vulnerabilities introduced by automated changes.
 
-2.2. Component Breakdown
+## Privacy & Compliance
+- PII: Detect and redact PII from prompts/responses and persisted items.
+- Retention: Define retention policy for audit logs and LLM transcripts.
+- Compliance: Ensure data transmission complies with organizational policies and regional regulations (GDPR, etc.).
 
-2.2.1. Core Agents
-Planner Agent: Ingests a task and breaks it down into a structured plan. The plan is presented in the UI for human review before execution.
-Developer Agent: Executes the plan by writing/modifying code. It can receive feedback and corrections from a human developer if it gets stuck or deviates from the intent.
-Reviewer Agent: Performs automated code reviews. A human developer can view the review results, override decisions, and provide additional feedback.
-Assembler Agent: Generates comprehensive documentation for the completed work.
+## Alternatives Considered
+- Fully Autonomous System: Rejected due to safety and accountability concerns.
+- Monolithic Agent: Rejected for maintainability and testability reasons.
+- Human-Only Review: Too slow and not scalable for high-volume repetitive tasks.
 
-2.2.2. Supporting Services
-LLM Service: Abstraction layer for communicating with various LLM providers.
-Database Service (MongoDB): Persists system state, metrics, and review results, making them available for the UI.
-UI Service: A React-based web interface that serves as the primary channel for Human-in-the-Loop (HITL) interaction. It allows developers to monitor progress, review artifacts (plans, code), and intervene in the workflow.
+## Risks & Mitigations
+- Risk: LLM hallucinations cause incorrect code. Mitigation: enforce tests, static analysis, and human approvals.
+- Risk: Prompt injection via Jira. Mitigation: sanitize inputs and require human plan approvals.
+- Risk: Cost overruns from LLM usage. Mitigation: cost monitoring, provider throttling, and caching.
 
-2.2.3. External Integrations
-Jira: Source of truth for tasks.
-GitHub: For all source code management.
-SonarQube: For in-depth static analysis.
+## Open Questions
+- Optimal granularity for Planner steps (task size tradeoffs).
+- Best signal mix for Reviewer scoring (LLM judgment vs. Sonar metrics).
+- Versioning strategy for prompt templates and LLM model pinning.
 
-3. Detailed Design
-
-3.1. Core Workflow with Human-in-the-Loop
-Task Ingestion: The workflow is triggered by a new Jira issue.
-Planning & Human Review: The Planner Agent generates a step-by-step plan. The system pauses for a human developer to review and approve this plan via the UI.
-Development Loop: a. The Developer Agent executes the approved plan, modifying the codebase. b. A human can monitor progress and, if necessary, provide corrective feedback to the agent through the UI.
-Review Loop & Human Approval: a. The Reviewer Agent analyzes the code and generates a review report. b. If the automated review fails, the loop iterates with the Developer Agent. A human is alerted if the loop exceeds a set number of attempts (MAX_REBUILD_ATTEMPTS). c. Once the automated review passes, a human developer performs a final check and gives explicit approval via the UI.
-Documentation: The Assembler Agent generates the final Markdown document.
-Finalization: Upon final human approval, the approved code is committed and pushed to the target branch on GitHub.
-
-3.2. Resilience and Scalability
-Resilience:
-Human Oversight: The HITL model is the ultimate resilience mechanism, allowing humans to resolve issues that the agents cannot handle autonomously.
-Robust Parsing: Uses json_repair to handle malformed LLM responses.
-Configuration-Driven: All settings are managed via .env for quick reconfiguration.
-Scalability:
-Parallelism: The Reviewer Agent processes files in parallel.
-Stateless Agents: The architecture allows for running multiple agent workflows in parallel, with human developers able to supervise multiple tasks simultaneously through the UI.
-
-4. Security Considerations
-Credential Management: Secrets in .env must be strictly controlled. For production, use a secrets management service (e.g., HashiCorp Vault).
-Permissions: The GitHub PAT should be scoped with the minimum required permissions (repo).
-Prompt Injection: Inputs from external sources (Jira tickets) must be sanitized. Human review of the initial plan provides a safeguard against malicious instructions.
-Code Security: The combination of SonarQube, the Reviewer Agent, and final human approval is critical for catching vulnerabilities in LLM-generated code.
-
-5. Monitoring and Observability
-Data Persistence: All significant events and agent outputs are persisted to MongoDB for audit and review.
-Monitoring & Intervention UI: The React UI is the central hub for both monitoring and intervention. It provides visibility into:
-Ongoing agent tasks and their current status (e.g., "Pending Human Review").
-Historical performance metrics and review scores.
-An interface for providing feedback, corrections, and approvals.
-
-Key Metrics to Track:
-Task success/failure rate.
-End-to-end task completion time (including human review time).
-Number of automated review cycles per task.
-Instances of human intervention/overrides.
-
-6. Alternatives Considered
-Fully Autonomous System: A model without built-in HITL checkpoints was considered but rejected. The risk of undesirable or incorrect autonomous actions was deemed too high. A collaborative approach provides a safer and more practical path to automation.
-Monolithic Agent: A single agent was rejected in favor of a multi-agent system, which is easier to debug, maintain, and provides clearer points for human intervention.
+## Appendix
+- Prompt Governance: store prompt templates in the Knowledge Base with version metadata.
+- Environment: Use `.env` for local dev, secrets manager for production.
+- CI/CD: Linting and tests run in PR pipeline; policy checks block merges.
