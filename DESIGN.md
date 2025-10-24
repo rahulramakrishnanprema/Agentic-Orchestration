@@ -98,21 +98,27 @@ graph TD
     UI -- "Enables HITL" --> HumanDeveloper
     HumanDeveloper -- "Monitors & Interacts" --> MongoDB
 
+
 2.2. Component Breakdown
+
 2.2.1. Core Agents
 Planner Agent: Ingests a task and breaks it down into a structured plan. The plan is presented in the UI for human review before execution.
 Developer Agent: Executes the plan by writing/modifying code. It can receive feedback and corrections from a human developer if it gets stuck or deviates from the intent.
 Reviewer Agent: Performs automated code reviews. A human developer can view the review results, override decisions, and provide additional feedback.
 Assembler Agent: Generates comprehensive documentation for the completed work.
+
 2.2.2. Supporting Services
 LLM Service: Abstraction layer for communicating with various LLM providers.
 Database Service (MongoDB): Persists system state, metrics, and review results, making them available for the UI.
 UI Service: A React-based web interface that serves as the primary channel for Human-in-the-Loop (HITL) interaction. It allows developers to monitor progress, review artifacts (plans, code), and intervene in the workflow.
+
 2.2.3. External Integrations
 Jira: Source of truth for tasks.
 GitHub: For all source code management.
 SonarQube: For in-depth static analysis.
+
 3. Detailed Design
+
 3.1. Core Workflow with Human-in-the-Loop
 Task Ingestion: The workflow is triggered by a new Jira issue.
 Planning & Human Review: The Planner Agent generates a step-by-step plan. The system pauses for a human developer to review and approve this plan via the UI.
@@ -120,6 +126,7 @@ Development Loop: a. The Developer Agent executes the approved plan, modifying t
 Review Loop & Human Approval: a. The Reviewer Agent analyzes the code and generates a review report. b. If the automated review fails, the loop iterates with the Developer Agent. A human is alerted if the loop exceeds a set number of attempts (MAX_REBUILD_ATTEMPTS). c. Once the automated review passes, a human developer performs a final check and gives explicit approval via the UI.
 Documentation: The Assembler Agent generates the final Markdown document.
 Finalization: Upon final human approval, the approved code is committed and pushed to the target branch on GitHub.
+
 3.2. Resilience and Scalability
 Resilience:
 Human Oversight: The HITL model is the ultimate resilience mechanism, allowing humans to resolve issues that the agents cannot handle autonomously.
@@ -128,22 +135,26 @@ Configuration-Driven: All settings are managed via .env for quick reconfiguratio
 Scalability:
 Parallelism: The Reviewer Agent processes files in parallel.
 Stateless Agents: The architecture allows for running multiple agent workflows in parallel, with human developers able to supervise multiple tasks simultaneously through the UI.
+
 4. Security Considerations
 Credential Management: Secrets in .env must be strictly controlled. For production, use a secrets management service (e.g., HashiCorp Vault).
 Permissions: The GitHub PAT should be scoped with the minimum required permissions (repo).
 Prompt Injection: Inputs from external sources (Jira tickets) must be sanitized. Human review of the initial plan provides a safeguard against malicious instructions.
 Code Security: The combination of SonarQube, the Reviewer Agent, and final human approval is critical for catching vulnerabilities in LLM-generated code.
+
 5. Monitoring and Observability
 Data Persistence: All significant events and agent outputs are persisted to MongoDB for audit and review.
 Monitoring & Intervention UI: The React UI is the central hub for both monitoring and intervention. It provides visibility into:
 Ongoing agent tasks and their current status (e.g., "Pending Human Review").
 Historical performance metrics and review scores.
 An interface for providing feedback, corrections, and approvals.
+
 Key Metrics to Track:
 Task success/failure rate.
 End-to-end task completion time (including human review time).
 Number of automated review cycles per task.
 Instances of human intervention/overrides.
+
 6. Alternatives Considered
 Fully Autonomous System: A model without built-in HITL checkpoints was considered but rejected. The risk of undesirable or incorrect autonomous actions was deemed too high. A collaborative approach provides a safer and more practical path to automation.
 Monolithic Agent: A single agent was rejected in favor of a multi-agent system, which is easier to debug, maintain, and provides clearer points for human intervention.
