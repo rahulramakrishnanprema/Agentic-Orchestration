@@ -55,7 +55,7 @@ graph TD
     Assembler(Assembler Agent)
     LLM(LLM Service)
     DB[(MongoDB)]
-    KB[(Knowledge Base (.md files))]
+    KB[("Knowledge Base (.md files)")]
   end
 
   User -->|Creates Issue| Jira
