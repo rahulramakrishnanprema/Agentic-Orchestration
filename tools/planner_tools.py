@@ -65,11 +65,25 @@ def _parse_json_array_from_text(text: str) -> List:
         if 0 <= start < end:
             array_str = cleaned_text[start:end]
             try:
-                return json.loads(array_str)
+                result = json.loads(array_str)
+                # Validate it's actually a list
+                if isinstance(result, list):
+                    return result
+                else:
+                    raise ValueError(f"Parsed JSON is not a list, got {type(result)}")
             except json.JSONDecodeError as e:
                 logger.warning(f"Standard JSON array parsing failed, attempting repair: {e}")
-                repaired = repair_json(array_str)
-                return json.loads(repaired)
+                try:
+                    repaired = repair_json(array_str)
+                    result = json.loads(repaired)
+                    # Validate it's actually a list
+                    if isinstance(result, list):
+                        return result
+                    else:
+                        raise ValueError(f"Repaired JSON is not a list, got {type(result)}")
+                except Exception as repair_error:
+                    logger.error(f"JSON repair failed: {repair_error}")
+                    raise ValueError(f"Could not repair JSON: {repair_error}")
         raise ValueError("No JSON array found in response")
     except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"JSON array parsing error: {e}. Response: {text[:500]}...")
@@ -153,7 +167,11 @@ def generate_got_subtasks(issue_data: Dict[str, Any], thread_id: str = "unknown"
             "nodes": {
                 node_id: dict(data) for node_id, data in graph.nodes(data=True)
             },
-            "edges": list(graph.edges())
+            "edges": list(graph.edges()),
+            "graph": {  # Add metadata here
+                "summary": summary,
+                "description": description
+            }
         }
 
         return {"success": True, "subtasks_graph": graph_data, "tokens_used": tokens}
@@ -230,10 +248,38 @@ def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[s
         if not subtasks_to_score:
             return {"success": True, "scored_subtasks": [], "tokens_used": 0}
 
+        # Ensure summary and description are available for the prompt
+        summary = requirements.get('summary')
+        description = requirements.get('description')
+
+        # Debug logging
+        logging.debug(f"[{thread_id}] Requirements keys: {list(requirements.keys())}")
+        logging.debug(f"[{thread_id}] Summary from requirements: '{summary}'")
+        logging.debug(f"[{thread_id}] Description from requirements: '{description}'")
+
+        # Try graph metadata if requirements don't have them
+        if not summary or not description:
+            logging.warning(f"[{thread_id}] Summary or description missing in requirements. Trying to get from subtasks_graph metadata.")
+            graph_metadata = subtasks_graph.get("graph", {})
+            logging.debug(f"[{thread_id}] Graph metadata keys: {list(graph_metadata.keys())}")
+
+            if not summary:
+                summary = graph_metadata.get("summary", "")
+                logging.debug(f"[{thread_id}] Summary from graph: '{summary}'")
+            if not description:
+                description = graph_metadata.get("description", "")
+                logging.debug(f"[{thread_id}] Description from graph: '{description}'")
+
+        # Final check - if still missing, use defaults
+        if not summary or not description:
+            logging.warning(f"[{thread_id}] Could not find summary or description after all attempts. Using defaults.")
+            summary = summary or "Development Task"
+            description = description or "A development task requiring implementation"
+
         formatted_prompt = prompt_loader.format(
             "planner_batch_subtask_scoring",
-            issue_description=requirements.get('project_description', ''),
-            summary=requirements.get('reasoning', ''),
+            issue_description=description,
+            summary=summary,
             requirements="\n".join(requirements.get('requirements', [])),
             subtasks_json=json.dumps(subtasks_to_score, indent=2)
         )
@@ -241,12 +287,28 @@ def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[s
         content, tokens = call_llm(formatted_prompt, agent_name="planner")
         scores_data = _parse_json_array_from_text(content)
 
+        # Handle cases where the LLM might return a list containing the actual list of scores
+        if scores_data and isinstance(scores_data[0], list):
+            logging.warning(f"[{thread_id}] LLM returned a nested list. Extracting inner list.")
+            scores_data = scores_data[0]
+
+        # Validate and filter out invalid score items (e.g., None from failed json_repair)
+        validated_scores = [item for item in scores_data if isinstance(item, dict) and 'id' in item]
+        if len(validated_scores) != len(scores_data):
+            logging.warning(f"[{thread_id}] Filtered out {len(scores_data) - len(validated_scores)} invalid score items.")
+        scores_data = validated_scores
+
         # Create a lookup for original subtask data
         original_subtasks = {
             str(node_id): node_data for node_id, node_data in subtasks_graph.get("nodes", {}).items()
         }
         scored_subtasks = []
         for score_item in scores_data:
+            # Validate that score_item is a dictionary
+            if not isinstance(score_item, dict):
+                logging.warning(f"[{thread_id}] Score item is not a dict, skipping: {type(score_item)} = {str(score_item)[:100]}")
+                continue
+
             subtask_id_str = str(score_item.get('id'))
             if subtask_id_str in original_subtasks:
                 original_data = original_subtasks[subtask_id_str]
@@ -261,6 +323,21 @@ def score_subtasks_with_llm(subtasks_graph: Dict[str, Any], requirements: Dict[s
                 scored_subtasks.append(scored_subtask)
                 logging.info(
                     f"[{thread_id}] Subtask {scored_subtask['id']}: Score {scored_subtask['score']:.1f} - {scored_subtask['description']}")
+
+        # If we got no valid scored subtasks, create defaults
+        if not scored_subtasks:
+            logging.warning(f"[{thread_id}] No valid scored subtasks extracted from LLM response. Creating defaults with 7.5 score.")
+            scored_subtasks = [
+                {
+                    'id': node_id,
+                    'description': node_data.get('description', ''),
+                    'priority': node_data.get('priority', 3),
+                    'score': 7.5,
+                    'reasoning': 'Default score assigned due to LLM response parsing issues',
+                    'requirements_covered': node_data.get('requirements_covered', [])
+                }
+                for node_id, node_data in subtasks_graph.get("nodes", {}).items()
+            ]
 
         return {"success": True, "scored_subtasks": scored_subtasks, "tokens_used": tokens}
     except Exception as e:
@@ -300,26 +377,49 @@ def merge_subtasks(scored_subtasks: List[Dict[str, Any]], jira_description: str,
         logger.info(f"[{thread_id}] Raw LLM response for merging subtasks: {content[:500]}...")
 
         # Use robust parsing functions
+        merged = []
         try:
-            data = parse_json_from_text(content)
-            merged = data.get('merged_subtasks', [])
-        except Exception:
-            logger.warning(f"[{thread_id}] Parsing as JSON object failed, trying as array.")
-            merged = _parse_json_array_from_text(content)
+            # Attempt to parse as a JSON array first, as this seems to be a common response format
+            parsed_data = _parse_json_array_from_text(content)
+            if isinstance(parsed_data, list):
+                merged = parsed_data
+            else:
+                # Fallback for object-based response
+                data = parse_json_from_text(content)
+                merged = data.get('merged_subtasks', [])
+        except Exception as e:
+            logger.warning(f"[{thread_id}] JSON parsing failed for merge_subtasks: {e}. Raw content: {content[:200]}")
+            # As a last resort, try to repair the whole content as a JSON array
+            try:
+                merged = _parse_json_array_from_text(content)
+            except Exception as final_e:
+                 logger.error(f"[{thread_id}] Final parsing attempt failed: {final_e}")
+                 raise ValueError("No merged subtasks were generated or parsed from the LLM response.")
 
         if not merged:
             raise ValueError("No merged subtasks were generated or parsed from the LLM response.")
 
-        # Validate that each merged subtask has required fields
+        # Validate that each merged subtask has required fields and is a dict
+        valid_merged = []
         for i, subtask in enumerate(merged):
+            if not isinstance(subtask, dict):
+                logging.warning(f"[{thread_id}] Merged subtask {i} is not a dict, skipping: {type(subtask)}")
+                continue
             if 'id' not in subtask or 'description' not in subtask:
-                raise ValueError(f"Merged subtask {i+1} missing required fields (id, description)")
+                logging.warning(f"[{thread_id}] Merged subtask {i} missing required fields (id, description), skipping")
+                continue
+            valid_merged.append(subtask)
 
-        # Create a mapping of scored subtasks by ID for quick lookup
+        if not valid_merged:
+            raise ValueError("No valid merged subtasks found after validation")
+
+        merged = valid_merged
+
+        # ...existing code...
         scored_map = {st['id']: st for st in scored_subtasks}
 
         for merged_subtask in merged:
-            source_ids = merged_subtask.get('merged_from', [])
+            source_ids = merged_subtask.get('covered_subtasks', []) # Changed from 'merged_from'
 
             if source_ids and isinstance(source_ids, list):
                 total_score, count = 0.0, 0

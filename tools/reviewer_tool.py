@@ -200,7 +200,28 @@ def parse_llm_result(content: str, review_type: str) -> ReviewResult:
                 )
 
             except json.JSONDecodeError as e:
-                logger.error(f"JSON parsing error in {review_type}: {e}")
+                logger.warning(f"JSON parsing error in {review_type}: {e}, attempting repair")
+                try:
+                    from json_repair import repair_json
+                    repaired = repair_json(json_str)
+                    parsed = json.loads(repaired)
+
+                    score = float(parsed.get('score', 75.0))
+                    mistakes = parsed.get('mistakes', [])
+                    reasoning = parsed.get('reasoning', '')
+
+                    if not isinstance(mistakes, list):
+                        mistakes = [str(mistakes)]
+
+                    score = max(0.0, min(100.0, score))
+
+                    return ReviewResult(
+                        score=score,
+                        mistakes=mistakes if mistakes else [f"{review_type} review completed"],
+                        reasoning=reasoning if reasoning else f"{review_type} analysis performed"
+                    )
+                except Exception as repair_error:
+                    logger.error(f"JSON repair also failed in {review_type}: {repair_error}")
 
         logger.warning(f"Could not parse {review_type} result, using defaults")
         return ReviewResult(

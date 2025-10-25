@@ -287,21 +287,50 @@ class CorePlannerAgent:
 
         logger.info(f"[CORE-PLANNER-{thread_id}] Scoring subtasks...")
 
+        # Ensure we have summary and description
+        summary = context.get("title", "")
+        description = content
+
+        # Fallback: if content is empty, try to use issue_data
+        if not description and state.get("issue_data"):
+            description = state.get("issue_data", {}).get("description", "")
+            summary = summary or state.get("issue_data", {}).get("summary", "")
+
+        logger.debug(f"[CORE-PLANNER-{thread_id}] Summary: '{summary[:80] if summary else 'EMPTY'}'")
+        logger.debug(f"[CORE-PLANNER-{thread_id}] Description: '{description[:80] if description else 'EMPTY'}'")
+
         try:
             from tools.planner_tools import score_subtasks_with_llm
 
             result = score_subtasks_with_llm.invoke({
                 "subtasks_graph": subtasks_graph,
                 "requirements": {
-                    "project_description": context.get("title", "Task"),
-                    "requirements": [content],
-                    "reasoning": "Derived from input content"
+                    "summary": summary,
+                    "description": description,
+                    "requirements": [description] if description else []
                 },
                 "thread_id": thread_id
             })
 
             if result.get("success"):
                 scored_subtasks = result.get("scored_subtasks", [])
+
+                # If no scored subtasks, create default scored versions from the graph
+                if not scored_subtasks:
+                    logger.warning(f"[CORE-PLANNER-{thread_id}] No scored subtasks returned. Creating defaults with 7.5 score.")
+                    subtasks_graph = state.get("subtasks_graph", {})
+                    scored_subtasks = [
+                        {
+                            'id': node_id,
+                            'description': node_data.get('description', ''),
+                            'priority': node_data.get('priority', 3),
+                            'score': 7.5,
+                            'reasoning': 'Default score assigned due to LLM scoring limitations',
+                            'requirements_covered': node_data.get('requirements_covered', [])
+                        }
+                        for node_id, node_data in subtasks_graph.get("nodes", {}).items()
+                    ]
+
                 overall = sum(s['score'] for s in scored_subtasks) / len(scored_subtasks) if scored_subtasks else 0.0
 
                 for subtask in scored_subtasks:
