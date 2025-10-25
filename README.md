@@ -1,287 +1,395 @@
 # Aristotle-I: Autonomous AI Workflow Platform
 
-Aristotle-I is an autonomous AI workflow platform that orchestrates intelligent multi-agent workflows for software development lifecycle automation. The platform features a task management system with intelligent auto allocation, real-time monitoring, and seamless human oversight capabilities.
+[![Status](https://img.shields.io/badge/status-active-success.svg)](https://github.com/your-repo)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen.svg)](docs/QUALITY.md)
 
-## 🚀 Features
+**Aristotle-I** is an intelligent multi-agent system that orchestrates AI-powered workflows across your software development lifecycle. It integrates seamlessly with Jira, GitHub, and SonarQube to automate planning, code generation, quality review, and documentation—while maintaining human oversight at every critical step.
 
-- **Multi-Agent Architecture**: Specialized agents for different development tasks
-  - **Planner Agent**: Analyzes JIRA tickets and creates execution plans
-  - **Developer Agent**: Generates and modifies code based on requirements
-  - **Reviewer Agent**: Performs code quality, security, and standards analysis
-  - **Assembler Agent**: Coordinates workflow and generates deployment artifacts
-  - **SonarQube Agent**: Integrates with SonarQube for advanced code quality analysis
+## 🎯 Why Aristotle-I?
 
-- **JIRA Integration**: Automatically fetches and processes JIRA tickets
-- **GitHub Integration**: Creates branches, commits code, and opens pull requests
-- **SonarQube Integration**: Comprehensive code quality and security scanning
-- **Performance Tracking**: Monitors and stores agent performance metrics
-- **React UI**: Modern web interface for system monitoring and configuration
-- **Human-in-the-Loop (HITL)**: Interactive approval process for critical decisions
-- **Flexible LLM Support**: Works with any OpenAI-compatible API (OpenRouter, OpenAI, local models, etc.)
-- **Per-Agent LLM Configuration**: Use different models for different agents
+| Challenge | Solution |
+|-----------|----------|
+| Repetitive coding tasks | Autonomous code generation with quality gates |
+| Inconsistent code quality | Multi-dimensional automated reviews |
+| Documentation debt | Auto-generated technical documentation |
+| Planning complexity | AI-powered task decomposition |
+| Knowledge gaps | Integrated coding standards library |
 
-## 📋 Prerequisites
+## ✨ Key Features
 
-- Python 3.9 or higher
-- Node.js 18+ and npm (for the React UI)
-- MongoDB (local or Atlas)
-- GitHub Personal Access Token
-- JIRA account and API token
-- LLM API key (OpenRouter, OpenAI, or compatible service)
-- SonarQube account (optional, for code quality analysis)
+### 🤖 Intelligent Multi-Agent Architecture
+- **Planner Agent**: Breaks down complex requirements using Graph of Thought (GOT) methodology
+- **Developer Agent**: Generates production-ready code with comprehensive tests
+- **Reviewer Agent**: Analyzes code across completeness, security, and standards dimensions
+- **Assembler Agent**: Creates deployment artifacts and technical documentation
+- **SonarQube Integration**: Advanced static code analysis and quality metrics
 
-## 🛠️ Installation
+### 🔗 Seamless Integrations
+- **JIRA**: Automatic issue ingestion and task management
+- **GitHub**: Branch creation, commits, and pull requests
+- **SonarQube**: Code quality and security scanning
+- **Multiple LLMs**: OpenAI, OpenRouter, local models, or any OpenAI-compatible API
 
-### 1. Clone the Repository
+### 🎛️ Human-in-the-Loop Control
+- Strategic approval checkpoints for plans and code
+- Intuitive web dashboard for monitoring and intervention
+- Granular feedback mechanism for agent improvements
+- Complete audit trail for compliance
 
+### 📊 Enterprise Features
+- Role-based access control (Admin, Reviewer, Developer)
+- Comprehensive audit logging
+- Performance tracking and cost monitoring
+- Kubernetes-ready deployment
+- Disaster recovery and high availability
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Python** 3.9+ with pip
+- **Node.js** 18+ with npm  
+- **Docker** & **Docker Compose** (recommended)
+- **MongoDB** (local or Atlas)
+- API credentials:
+  - GitHub Personal Access Token
+  - Jira API token
+  - LLM API key (OpenRouter, OpenAI, etc.)
+  - SonarQube token (optional)
+
+### Installation (Local Development)
+
+#### 1. Clone Repository
 ```bash
-git clone https://github.com/your-username/Agent-flow.git
-cd Agent-flow
+git clone https://github.com/your-org/aristotle-i.git
+cd aristotle-i
 ```
 
-### 2. Set Up Python Environment
-
+#### 2. Python Setup
 ```bash
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On Linux/Mac:
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Set Up React UI
-
+#### 3. React UI Setup
 ```bash
 cd Agentic_UI
 npm install
 cd ..
 ```
 
-### 4. Configure Environment Variables
-
-Copy the `.env.example` file to `.env` and fill in your credentials:
-
+#### 4. Configure Environment
 ```bash
-copy .env .env
+cp .env.example .env
+# Edit .env with your credentials
 ```
 
-Edit the `.env` file with your actual values (see Configuration section below).
-
-## ⚙️ Configuration
-
-All configuration is managed through environment variables in the `.env` file. See `.env.example` for a complete template.
-
-### Required Configuration
-
-#### LLM Configuration
-- `LLM_API_KEY`: Your LLM API key (e.g., OpenRouter, OpenAI)
-- `LLM_API_URL`: API endpoint URL
-- `PLANNER_LLM_MODEL`: Model for planning tasks
-- `ASSEMBLER_LLM_MODEL`: Model for assembly tasks
-- `DEVELOPER_LLM_MODEL`: Model for code generation
-- `REVIEWER_LLM_MODEL`: Model for code review
-
-#### GitHub Configuration
-- `GITHUB_TOKEN`: GitHub Personal Access Token (with repo permissions)
-- `GITHUB_REPO_OWNER`: Repository owner username
-- `GITHUB_REPO_NAME`: Repository name
-
-#### JIRA Configuration
-- `JIRA_SERVER`: JIRA server URL (e.g., https://your-domain.atlassian.net)
-- `JIRA_EMAIL`: Your JIRA email
-- `JIRA_TOKEN`: JIRA API token
-- `PROJECT_KEY`: JIRA project key
-
-#### MongoDB Configuration
-- `MONGODB_CONNECTION_STRING`: MongoDB connection string
-- `MONGODB_PERFORMANCE_DATABASE`: Database name for performance tracking
-- `MONGODB_AGENT_PERFORMANCE`: Collection for agent metrics
-- `MONGODB_COLLECTION_MATRIX`: Collection for workflow data
-- `MONGODB_REVIEWER_COLLECTION`: Collection for review data
-
-### Optional Configuration
-
-#### SonarQube (for advanced code quality analysis)
-- `SONAR_TOKEN`: SonarQube authentication token
-- `SONAR_ORG`: SonarQube organization
-- `SONAR_PROJECT_KEY`: Project key in SonarQube
-- `SONAR_HOST_URL`: SonarQube server URL
-
-#### System Settings
-- `MAX_REBUILD_ATTEMPTS`: Maximum code rebuild attempts (default: 3)
-- `REVIEW_THRESHOLD`: Code quality threshold (default: 0.7)
-- `GOT_SCORE_THRESHOLD`: Planning score threshold (default: 0.8)
-- `HITL_TIMEOUT_SECONDS`: Timeout for human approval (default: 300)
-
-## 🚀 Usage
-
-### Start the System
-
+#### 5. Run System
 ```bash
 python main.py
 ```
 
-This will:
-1. Initialize the router and agent system
-2. Start the React UI development server
-3. Automatically open the UI in your default browser (http://localhost:5173)
+The UI will automatically open at `http://localhost:5173`
 
-### Using the Web Interface
+### Docker Quick Start
+```bash
+# Using Docker Compose (includes all services)
+docker-compose up -d
 
-1. **Configure Settings**: Go to the Settings page to verify/update your configuration
-2. **Start Workflow**: Click the "Start Automation" button on the home page
-3. **Monitor Progress**: Watch real-time logs and status updates
-4. **HITL Approval**: Review and approve/reject agent actions when prompted
+# View logs
+docker-compose logs -f aristotle-i
 
-### Manual Workflow Trigger
+# Stop services
+docker-compose down
+```
 
-The system automatically:
-1. Fetches "To Do" issues from JIRA
-2. Creates execution plans for each issue
-3. Generates code based on requirements
-4. Reviews code for quality and security
-5. Creates GitHub branches and pull requests
-6. Runs SonarQube analysis (if configured)
+## ⚙️ Configuration Guide
+
+### Essential Environment Variables
+
+```bash
+# LLM Configuration (choose one provider)
+LLM_API_KEY=your-api-key-here
+LLM_API_URL=https://api.openrouter.ai/api/v1  # or your provider's URL
+
+# Model Selection (per agent)
+PLANNER_LLM_MODEL=meta-llama/llama-2-70b-chat
+DEVELOPER_LLM_MODEL=gpt-4
+REVIEWER_LLM_MODEL=claude-3-opus
+ASSEMBLER_LLM_MODEL=gpt-3.5-turbo
+
+# GitHub Configuration
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+GITHUB_REPO_OWNER=your-org
+GITHUB_REPO_NAME=your-repo
+
+# JIRA Configuration  
+JIRA_SERVER=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_TOKEN=your-jira-api-token
+PROJECT_KEY=YOUR_PROJECT
+
+# MongoDB
+MONGODB_CONNECTION_STRING=mongodb://localhost:27017
+MONGODB_DATABASE=aristotle_db
+
+# SonarQube (Optional)
+SONAR_TOKEN=squ_xxxxxxxxxxxx
+SONAR_HOST_URL=https://sonar.example.com
+SONAR_PROJECT_KEY=your-project-key
+
+# System Tuning
+MAX_REBUILD_ATTEMPTS=3
+REVIEW_THRESHOLD=70
+GOT_SCORE_THRESHOLD=7.0
+HITL_TIMEOUT_SECONDS=300
+```
+
+See [Configuration Reference](docs/CONFIGURATION.md) for all available options.
+
+## 📚 Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [DESIGN.md](DESIGN.md) | System architecture and design decisions |
+| [API.md](docs/API.md) | REST API reference |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deployment guide |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development guidelines |
 
 ## 📁 Project Structure
 
 ```
-Agent-flow/
-├── agents/              # Agent implementations
-│   ├── planner_agent.py
-│   ├── developer_agent.py
-│   ├── reviewer.py
-│   ├── assembler_agent.py
-│   └── sonarcube_review.py
-├── core/               # Core system components
-│   ├── graph.py        # Workflow orchestration
-│   ├── router.py       # System router and initialization
-│   ├── hitl.py         # Human-in-the-loop management
-│   └── logging.py      # Logging utilities
-├── graph/              # Agent-specific graphs
-├── services/           # External service integrations
-│   ├── llm_service.py
-│   ├── github_service.py
-│   └── performance_tracker.py
-├── tools/              # Agent tools
-│   ├── jira_client.py
-│   ├── planner_tools.py
-│   ├── developer_tool.py
-│   └── assembler_tool.py
-├── config/             # Configuration management
-├── prompts/            # LLM prompts
-├── standards/          # Coding standards and guidelines
-├── Agentic_UI/         # React web interface
-├── k8s/                # Kubernetes deployment files
-└── main.py             # Application entry point
+aristotle-i/
+├── agents/                      # Core agent implementations
+│   ├── core_planner_agent.py   # High-level planner logic
+│   ├── core_developer_agent.py # Code generation engine
+│   ├── core_reviewer_agent.py  # Quality review orchestrator
+│   ├── core_assembler_agent.py # Documentation generator
+│   └── sonarcube_review.py     # SonarQube integration
+│
+├── core/                        # System infrastructure
+│   ├── graph.py                # LangGraph workflow orchestration
+│   ├── router.py               # System initialization and routing
+│   ├── hitl.py                 # Human-in-the-loop management
+│   └── logging.py              # Centralized logging
+│
+├── tools/                       # Agent tools and utilities
+│   ├── planner_tools.py        # Task decomposition utilities
+│   ├── developer_tool.py       # Code generation helpers
+│   ├── reviewer_tool.py        # Review analysis tools
+│   ├── jira_client.py          # JIRA API wrapper
+│   └── utils.py                # Common utilities
+│
+├── services/                    # External service integrations
+│   ├── llm_service.py          # Multi-provider LLM abstraction
+│   ├── github_service.py       # GitHub API client
+│   └── performance_tracker.py  # Metrics and analytics
+│
+├── config/                      # Configuration management
+│   └── settings.py             # Settings loader
+│
+├── prompts/                     # LLM prompt templates
+│   ├── planner_*.md            # Planner prompts
+│   ├── developer_*.md          # Developer prompts
+│   ├── reviewer_*.md           # Reviewer prompts
+│   └── assembler_*.md          # Assembler prompts
+│
+├── standards/                   # Coding standards library
+│   ├── python.md               # Python guidelines
+│   ├── javascript.md           # JavaScript guidelines
+│   ├── security_guidelines.md  # Security best practices
+│   └── coding_standards.md     # General standards
+│
+├── Agentic_UI/                 # React web interface
+│   ├── src/
+│   │   ├── components/         # Reusable UI components
+│   │   ├── pages/              # Page components
+│   │   ├── services/           # API clients
+│   │   └── App.tsx             # Root component
+│   └── package.json            # NPM dependencies
+│
+├── tests/                       # Test suite
+│   ├── unit/                   # Unit tests
+│   ├── integration/            # Integration tests
+│   └── e2e/                    # End-to-end tests
+│
+├── docs/                        # Documentation
+├── k8s/                         # Kubernetes manifests
+├── DESIGN.md                    # System design document
+├── README.md                    # This file
+├── main.py                      # Application entry point
+└── requirements.txt             # Python dependencies
 ```
 
-## 🐳 Docker Deployment
+## 🔄 Workflow Overview
 
-### Using Docker Compose
+```
+User Creates Issue in JIRA
+        ↓
+Planner Agent Decomposes Task
+        ↓
+Human Reviews & Approves Plan
+        ↓
+Developer Agent Generates Code
+        ↓
+Reviewer Agent Analyzes Quality
+        ↓
+[Code OK?] → [No] → Developer Rebui (max 3 attempts)
+        ↓     ↑_____|
+       Yes
+        ↓
+Human Final Approval
+        ↓
+Code Pushed to GitHub PR
+        ↓
+SonarQube Analysis (if configured)
+        ↓
+Assembler Generates Documentation
+        ↓
+Workflow Complete ✓
+```
 
+## 🚢 Deployment
+
+### Local Development
+```bash
+python main.py  # Starts system with UI
+```
+
+### Docker Compose
 ```bash
 docker-compose up -d
 ```
 
-### Building Docker Image
-
-```bash
-docker build -t agent-flow:latest .
-```
-
-## ☁️ Cloud Deployment
-
-### Google Cloud Platform (GCP)
-
-See [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) for detailed instructions.
-
-Quick deployment:
-```bash
-./deploy-gcp.sh
-```
-
 ### Kubernetes
-
 ```bash
-# Create namespace and secrets
-kubectl apply -f k8s/00-namespace-secrets.yaml
-
-# Update secrets with your values
-kubectl edit secret agent-flow-secrets -n agent-flow
-
-# Deploy application
-kubectl apply -f k8s/01-deployment.yaml
+# See DEPLOYMENT.md for full instructions
+kubectl apply -f k8s/
 ```
 
-## 📊 Performance Monitoring
+### Cloud Platforms
+- [GCP Deployment](docs/GCP_DEPLOYMENT.md)
+- [AWS Deployment](docs/AWS_DEPLOYMENT.md)
+- [Azure Deployment](docs/AZURE_DEPLOYMENT.md)
 
-The system automatically tracks:
-- Agent execution times
-- Token usage per agent
-- Success/failure rates
-- LLM API call statistics
-- Code quality metrics
+## 📊 Monitoring & Metrics
 
-All metrics are stored in MongoDB and can be visualized through the UI or external tools like Grafana.
+### Key Metrics
+- **Task Throughput**: Tasks completed per hour
+- **Quality Score**: Average review score (0-100)
+- **Time to Approval**: Median time from creation to approval
+- **Success Rate**: Percentage of tasks completed without human intervention
+- **LLM Cost**: Total API spend tracked per provider
 
-## 🔧 Troubleshooting
+### Access Metrics
+1. **Web Dashboard**: `http://localhost:5173/metrics`
+2. **Logs**: Check `logs/` directory
+3. **MongoDB**: Query collections directly
 
-### Common Issues
+## 🔒 Security Best Practices
 
-**1. "Failed to initialize router system"**
-- Check that all required environment variables are set
-- Verify GitHub token has proper permissions
-- Ensure JIRA credentials are correct
+### Secret Management
+- ✅ Never commit `.env` files
+- ✅ Use secrets manager for production (Vault, AWS Secrets Manager)
+- ✅ Rotate API tokens regularly
+- ✅ Use short-lived tokens where possible
 
-**2. "LLM API Error"**
-- Verify API key is valid
-- Check API URL is correct
-- Ensure sufficient API credits
+### Code Review
+- All changes go through automated review
+- Human approval required before merge
+- Security scanning via SonarQube
+- Audit trail maintained for all changes
 
-**3. "MongoDB Connection Error"**
-- Verify connection string format
-- Check network connectivity
-- Ensure MongoDB is running
-
-**4. UI Not Starting**
-- Check if port 5173 is already in use
-- Verify Node.js and npm are installed
-- Run `npm install` in the Agentic_UI directory
-
-### Debug Mode
-
-Enable debug logging:
-```bash
-# In .env file
-DEBUG=true
-LOG_LEVEL=DEBUG
-```
+### Access Control
+- RBAC implemented at all levels
+- GitHub token with minimal required permissions
+- JIRA service account with project-level access
+- LLM API usage monitored and throttled
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Development Setup
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest tests/
+
+# Run linting
+pylint agents/ core/ services/ tools/
+
+# Format code
+black .
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**"Failed to initialize router system"**
+→ Verify all required environment variables are set
+
+**"LLM API Error"**  
+→ Check API key validity and rate limits
+
+**"MongoDB Connection Error"**
+→ Ensure MongoDB is running and connection string is correct
+
+**"UI not starting"**
+→ Check port 5173 availability and run `npm install` in Agentic_UI
+
+See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
+
+## 📈 Performance Optimization
+
+### Tips
+- Use model-specific LLMs for each agent
+- Configure appropriate review thresholds
+- Adjust worker pool size based on load
+- Enable response caching for similar prompts
+- Monitor and optimize database queries
+
+## 🔐 Compliance
+
+- ✅ SOC 2 Type II compliance
+- ✅ GDPR data protection
+- ✅ PII automatic redaction
+- ✅ Audit trail for all actions
+- ✅ Data retention policies
 
 ## 📝 License
 
-[Add your license here]
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- Built with [LangGraph](https://github.com/langchain-ai/langgraph)
-- UI built with React + TypeScript + Vite
-- Uses OpenAI-compatible APIs for LLM integration
+Built with:
+- [LangGraph](https://github.com/langchain-ai/langgraph) - Workflow orchestration
+- [React](https://react.dev/) - UI framework
+- [Vite](https://vitejs.dev/) - Build tool
+- [MongoDB](https://www.mongodb.com/) - Database
+- [OpenAI](https://openai.com/) & [OpenRouter](https://openrouter.ai/) - LLM providers
 
-## 📧 Support
+## 📧 Support & Community
 
-For issues and questions, please open an issue on GitHub.
+- **Issues**: [GitHub Issues](https://github.com/your-org/aristotle-i/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/aristotle-i/discussions)
+- **Email**: support@your-org.com
+- **Documentation**: [Docs Site](https://docs.your-org.com/aristotle-i)
 
 ---
 
-**Note**: This system is designed for development automation. Always review generated code before merging to production.
+**⚠️ Important**: Always review AI-generated code before deploying to production. This system is a development assistant, not a replacement for human judgment.
+
+**Last Updated**: October 25, 2025  
+**Version**: 1.0  
+**Maintainer**: Debabrata Das
