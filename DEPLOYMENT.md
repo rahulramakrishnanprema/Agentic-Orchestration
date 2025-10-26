@@ -1101,6 +1101,6 @@ kubectl set resources deployment aristotlei \
 For issues or questions:
 - Check the main [README.md](README.md)
 - Review [DESIGN.md](DESIGN.md) for architecture details
-- Check [DOCUMENTATION_COMPLETE.md](DOCUMENTATION_COMPLETE.md) for additional information
+- See [START.md](START.md) for quick deployment guide
 - Visit the project repository for updates
 
