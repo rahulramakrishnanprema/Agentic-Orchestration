@@ -74,7 +74,6 @@ pnpm-debug.log*
 # Frontend build outputs (specific frontend folder plus general)
 Agentic_UI/dist/
 Agentic_UI/build/
-Agentic_UI/package-lock.json
 .vite/
 
 # Frontend caches
