@@ -28,26 +28,31 @@ export const AgentPerformanceCharts: React.FC<AgentPerformanceChartsProps> = ({ 
   }));
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Agent Efficiency Comparison */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">Agent Efficiency (Tasks per 1K Tokens)</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={agentTaskData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Line
-              type="monotone"
-              dataKey="efficiency"
-              stroke="#10B981"
-              strokeWidth={3}
-              dot={{ fill: '#10B981', strokeWidth: 2, r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
+    // Return only the chart; parent component will provide the outer box and heading
+    <>
+      <h3 className="text-lg font-semibold text-slate-900 mb-4">Agent Efficiency (Tasks per 1K Tokens)</h3>
+      <ResponsiveContainer width="100%" height={380}>
+        <LineChart data={agentTaskData} margin={{ top: 20, right: 30, left: 20, bottom: 35 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="name"
+            interval={0}
+            tick={{ fontSize: 14 }}
+            height={70}
+            angle={0}
+            textAnchor="middle"
+          />
+          <YAxis />
+          <Tooltip />
+          <Line
+            type="monotone"
+            dataKey="efficiency"
+            stroke="#10B981"
+            strokeWidth={3}
+            dot={{ fill: '#10B981', strokeWidth: 2, r: 6 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </>
   );
 };

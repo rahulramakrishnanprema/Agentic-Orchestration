@@ -1,33 +1,159 @@
-# Python
+# .gitignore for the entire project (aristotlei)
+# Covers Python, Node (Agentic_UI), build artifacts, IDE files, OS files, and common caches
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
+*.pyo
+*.pyd
+.gitignore
+# C extensions
 *.so
+*.dylib
+*.dll
 
-# Logs
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.egg
+*.whl
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.noseids
+.tox/
+.nox/
+.pytest_cache/
+
+# Virtual environments
+env/
+venv/
+ENV/
+.venv/
+venv.bak/
+
+# Pyenv
+.python-version
+
+# Mypy / type check caches
+.mypy_cache/
+.pyre/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Secrets and environment variables
+.env
+.env.*
+secrets.json
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Node
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend build outputs (specific frontend folder plus general)
+Agentic_UI/dist/
+Agentic_UI/build/
+Agentic_UI/package-lock.json
+.vite/
+
+# Frontend caches
+.cache/
+parcel-cache/
+.next/
+.nuxt/
+.out/
+
+# Lockfiles
+# Keep lockfiles tracked by default. Uncomment if you prefer to ignore them.
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.code-workspace
+*.iml
+out/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# temp files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# backups and editor files
+*~
+*.bak
+*.orig
+*.patch
+*.rej
+*.swo
+*.swp
+
+# logs
 logs/
 *.log
 
-# Environment
-.env
+# coverage reports
+coverage/
+coverage-report/
 
-# Data
-data/
+# compiled assets
+*.min.js
+*.map
+
+# OS generated files
+.pnp/
+.pnp.js
+
+# Local environment for JetBrains/IDEA
+
+# End of .gitignore
+# Development database
+*.db
+*.sqlite
+mongodb_data/
+
+# Temporary files
 created_project_files/
 deployment_documents/
-# IDE
-.vscode/
-.idea/
-
-# React/Node
-ui/node_modules/
-ui/build/
-ui/dist/
-
-# Test coverage
-.coverage
-htmlcov/
-
-# MongoDB
-mongodb_data/
+debug_json_failures/

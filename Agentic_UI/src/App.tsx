@@ -393,16 +393,7 @@ function App() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <PerformanceCharts data={performanceData} successRate={metrics.successRate} failureRate={100 - metrics.successRate} />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="mt-8"
-            >
-              <h2 className="text-xl font-semibold text-slate-900 mb-6">Agent Performance Analytics</h2>
-              <AgentPerformanceCharts agents={agents} />
+              <PerformanceCharts data={performanceData} successRate={metrics.successRate} failureRate={100 - metrics.successRate} agents={agents} />
             </motion.div>
           </motion.div>
         );

@@ -1,15 +1,15 @@
 // File: src/components/PerformanceCharts.tsx
 import React from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { PerformanceData } from '../types/dashboard';
+import { PerformanceData, Agent } from '../types/dashboard';
+import { AgentPerformanceCharts } from './AgentPerformanceCharts';
 
 interface PerformanceChartsProps {
   data: PerformanceData[];
-  successRate: number;
-  failureRate: number;
+  agents?: Agent[];
 }
 
-export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ data, successRate, failureRate }) => {
+export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ data, agents = [] }) => {
 
   // UPDATED: Format date as "7-Oct" (day-three letter month, always two digits for day)
   const formatDate = (value: string) => {
@@ -123,34 +123,10 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({ data, succ
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {/* Agent Task Performance */}
+      {/* Agent Efficiency chart (replace previous Agent Task Performance) */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">Agent Task Performance</h3>
-        <ResponsiveContainer width="100%" height={380}>
-          <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 35 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatDate}
-              interval={0}
-              tick={{ fontSize: 14 }}
-              height={70}
-              angle={0}
-              textAnchor="middle"
-            />
-            <YAxis
-              domain={[0, 20]}
-              ticks={[0, 5, 10, 15, 20]}
-              tickFormatter={(value) => value.toString()}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend />
-            <Line type="linear" dataKey="agent_activities.PlannerAgent.Task_completed" stroke={agentColors.PlannerAgent} strokeWidth={2} name="Planner" />
-            <Line type="linear" dataKey="agent_activities.AssemblerAgent.Task_completed" stroke={agentColors.AssemblerAgent} strokeWidth={2} name="Assembler" />
-            <Line type="linear" dataKey="agent_activities.DeveloperAgent.Task_completed" stroke={agentColors.DeveloperAgent} strokeWidth={2} name="Developer" />
-            <Line type="linear" dataKey="agent_activities.ReviewerAgent.Task_completed" stroke={agentColors.ReviewerAgent} strokeWidth={2} name="Reviewer" />
-          </LineChart>
-        </ResponsiveContainer>
+        {/* AgentPerformanceCharts contains its own heading: "Agent Efficiency (Tasks per 1K Tokens)" */}
+        <AgentPerformanceCharts agents={agents} />
       </div>
       {/* Code Quality Trend */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
