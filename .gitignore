@@ -63,6 +63,14 @@ secrets.json
 .env.test.local
 .env.production.local
 
+# GCP and sensitive key files
+*key*.json
+*credentials*.json
+*secret*.json
+gitlab-deployer-key.json
+GCP_SERVICE_ACCOUNT_KEY_FORMATTED.json
+scripts/gitlab-deployer-key.json
+
 # Node
 node_modules/
 **/node_modules/
