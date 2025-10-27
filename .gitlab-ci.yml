@@ -8,9 +8,6 @@ variables:
   IMAGE_NAME: "aristotlei"
   SERVICE_NAME: "aristotlei"
 
-# ============================================================================
-# BUILD STAGE: Build and push Docker image to GCP Artifact Registry
-# ============================================================================
 build:
   stage: build
   image: google/cloud-sdk:alpine
@@ -33,9 +30,6 @@ build:
     - main
     - develop
 
-# ============================================================================
-# DEPLOY STAGE: Deploy to Cloud Run (Production)
-# ============================================================================
 deploy:production:
   stage: deploy
   image: google/cloud-sdk:alpine
@@ -73,16 +67,13 @@ deploy:production:
         --labels=environment=production,app=aristotlei,managed-by=gitlab-ci
     - export SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} --region=${GCP_REGION} --format='value(status.url)')
     - echo "✅ Deployment successful!"
-    - echo "🌐 Service URL: $SERVICE_URL"
+    - echo "🌐 Service URL=$SERVICE_URL"
   environment:
     name: production
   only:
     - main
   when: on_success
 
-# ============================================================================
-# DEPLOY STAGE: Deploy to Cloud Run (Staging)
-# ============================================================================
 deploy:staging:
   stage: deploy
   image: google/cloud-sdk:alpine
@@ -113,16 +104,13 @@ deploy:staging:
         --labels=environment=staging,app=aristotlei,managed-by=gitlab-ci
     - export SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME}-staging --region=${GCP_REGION} --format='value(status.url)')
     - echo "✅ Staging deployment successful!"
-    - echo "🌐 Service URL: $SERVICE_URL"
+    - echo "🌐 Service URL=$SERVICE_URL"
   environment:
     name: staging
   only:
     - develop
   when: on_success
 
-# ============================================================================
-# VERIFY STAGE: Health check and smoke tests
-# ============================================================================
 verify:production:
   stage: verify
   image: curlimages/curl:latest
@@ -148,17 +136,4 @@ verify:staging:
   only:
     - develop
   when: on_success
-
-  script:
-    - echo "⏪ Rolling back production deployment..."
-    - |
-      gcloud run services update-traffic ${SERVICE_NAME} \
-        --region=${GCP_REGION} \
-        --to-latest
-    - echo "✅ Rollback completed!"
-  only:
-    - main
-  when: manual
-  environment:
-    name: production
 
