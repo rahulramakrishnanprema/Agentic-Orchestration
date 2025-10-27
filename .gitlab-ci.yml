@@ -149,16 +149,6 @@ verify:staging:
     - develop
   when: on_success
 
-# ============================================================================
-# ROLLBACK JOB: Manual rollback to previous version
-# ============================================================================
-rollback:production:
-  stage: deploy
-  image: google/cloud-sdk:alpine
-  before_script:
-    - echo $GCP_SERVICE_ACCOUNT_KEY > ${HOME}/gcp-key.json
-    - gcloud auth activate-service-account --key-file ${HOME}/gcp-key.json
-    - gcloud config set project $GCP_PROJECT_ID
   script:
     - echo "⏪ Rolling back production deployment..."
     - |
