@@ -81,6 +81,8 @@ class JiraAssemblerWorkflow:
 
     def _save_markdown_locally(self, issue_key: str, markdown_content: str):
         """Save markdown document to local folder"""
+        if os.getenv("LOCAL_STORAGE", "True").lower() != "true" or not markdown_content:
+            return
         try:
             local_folder = "deployment_documents"
             os.makedirs(local_folder, exist_ok=True)

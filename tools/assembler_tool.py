@@ -207,17 +207,19 @@ def generate_deployment_document(
         document = _extract_json_from_response(content, thread_id)
         _validate_document_structure(document, thread_id)
 
-        # Generate Markdown from validated JSON locally instead of a second LLM call
-        logger.info(f"[{thread_id}] Generating Markdown documentation from JSON...")
-        md_content = _generate_markdown_from_document(document)
-
-        # Store MD locally
-        local_folder = "deployment_documents"
-        os.makedirs(local_folder, exist_ok=True)
-        md_path = os.path.join(local_folder, f"{issue_data.get('key', 'UNKNOWN')}.md")
-        with open(md_path, 'w', encoding='utf-8') as f:
-            f.write(md_content)
-        logger.info(f"[{thread_id}] ✓ Deployment document saved to {md_path}")
+        # Generate Markdown only if LOCAL_STORAGE is enabled
+        md_content = ""
+        if os.getenv("LOCAL_STORAGE", "True").lower() == "true":
+            logger.info(f"[{thread_id}] Generating Markdown documentation from JSON...")
+            md_content = _generate_markdown_from_document(document)
+            local_folder = "deployment_documents"
+            os.makedirs(local_folder, exist_ok=True)
+            md_path = os.path.join(local_folder, f"{issue_data.get('key', 'UNKNOWN')}.md")
+            with open(md_path, 'w', encoding='utf-8') as f:
+                f.write(md_content)
+            logger.info(f"[{thread_id}] ✓ Deployment document saved to {md_path}")
+        else:
+            logger.info(f"[{thread_id}] Skipping Markdown generation (LOCAL_STORAGE=False)")
 
         return {
             "success": True,

@@ -61,6 +61,8 @@ def _extract_code_from_llm_response(response_text: str) -> str:
 
 def save_files_locally(files: Dict[str, str], issue_key: str):
     """Save generated files to local directory, creating subdirectories as needed."""
+    if os.getenv("LOCAL_STORAGE", "True").lower() != "true":
+        return
     base_folder = "created_project_files"
     project_folder = os.path.join(base_folder, issue_key)
     os.makedirs(project_folder, exist_ok=True)
