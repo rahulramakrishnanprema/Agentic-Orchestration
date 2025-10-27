@@ -25,7 +25,6 @@ build:
     - docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
     - docker push $IMAGE_TAG
     - docker push $IMAGE_LATEST
-    - echo "✅ Images pushed successfully"
   only:
     - main
     - develop
@@ -49,91 +48,27 @@ deploy:production:
         --cpu=2 \
         --timeout=3600 \
         --allow-unauthenticated \
-        --set-env-vars="UI_HOST=0.0.0.0,UI_PORT=8080,REACT_DEV_PORT=5173,DEBUG=false,LOG_LEVEL=INFO" \
-        --set-env-vars="MAX_REBUILD_ATTEMPTS=3,REVIEW_THRESHOLD=0.75,GOT_SCORE_THRESHOLD=0.70,HITL_TIMEOUT_SECONDS=300" \
-        --set-env-vars="MONGODB_CONNECTION_STRING=${MONGODB_CONNECTION_STRING},MONGODB_DATABASE=aristotlei,MONGODB_ENABLED=true" \
-        --set-env-vars="MONGODB_COLLECTION_MATRIX=performance_matrix,MONGODB_PERFORMANCE_DATABASE=performance_db" \
-        --set-env-vars="MONGODB_AGENT_PERFORMANCE=agent_perf,MONGODB_REVIEWER_COLLECTION=reviewer_results" \
-        --set-env-vars="MONGODB_FEEDBACK_DATABASE=feedback_db,DEVELOPER_AGENT_FEEDBACK=dev_feedback,ASSEMBLER_FEEDBACK=assembler_feedback" \
+        --set-env-vars="UI_HOST=0.0.0.0,UI_PORT=8080,DEBUG=false,LOG_LEVEL=INFO" \
+        --set-env-vars="MONGODB_CONNECTION_STRING=${MONGODB_CONNECTION_STRING},MONGODB_DATABASE=aristotlei" \
         --set-env-vars="GITHUB_TOKEN=${GITHUB_TOKEN},GITHUB_REPO_OWNER=${GITHUB_REPO_OWNER},GITHUB_REPO_NAME=${GITHUB_REPO_NAME}" \
-        --set-env-vars="PLANNER_LLM_MODEL=gpt-4,DEVELOPER_LLM_MODEL=gpt-4,REVIEWER_LLM_MODEL=gpt-4,ASSEMBLER_LLM_MODEL=gpt-4" \
         --set-env-vars="PLANNER_LLM_KEY=${PLANNER_LLM_KEY},DEVELOPER_LLM_KEY=${DEVELOPER_LLM_KEY},REVIEWER_LLM_KEY=${REVIEWER_LLM_KEY},ASSEMBLER_LLM_KEY=${ASSEMBLER_LLM_KEY}" \
         --set-env-vars="JIRA_SERVER=${JIRA_SERVER},JIRA_EMAIL=${JIRA_EMAIL},JIRA_TOKEN=${JIRA_TOKEN},PROJECT_KEY=${PROJECT_KEY}" \
-        --set-env-vars="SONAR_HOST_URL=${SONAR_HOST_URL},SONAR_TOKEN=${SONAR_TOKEN},SONAR_ORG=${SONAR_ORG},SONAR_PROJECT_KEY=${SONAR_PROJECT_KEY}" \
-        --set-env-vars="REVIEW_BRANCH_NAME=ai-review,STANDARDS_FOLDER=./standards" \
         --min-instances=1 \
         --max-instances=10 \
-        --concurrency=80 \
-        --labels=environment=production,app=aristotlei,managed-by=gitlab-ci
-    - export SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} --region=${GCP_REGION} --format='value(status.url)')
-    - echo "✅ Deployment successful!"
-    - echo "🌐 Service URL=$SERVICE_URL"
+        --labels=app=aristotlei
   environment:
     name: production
   only:
     - main
-  when: on_success
-
-deploy:staging:
-  stage: deploy
-  image: google/cloud-sdk:alpine
-  before_script:
-    - echo $GCP_SERVICE_ACCOUNT_KEY > ${HOME}/gcp-key.json
-    - gcloud auth activate-service-account --key-file ${HOME}/gcp-key.json
-    - gcloud config set project $GCP_PROJECT_ID
-  script:
-    - export IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${IMAGE_NAME}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-    - |
-      gcloud run deploy ${SERVICE_NAME}-staging \
-        --image=${IMAGE_TAG} \
-        --platform=managed \
-        --region=${GCP_REGION} \
-        --port=8080 \
-        --memory=2Gi \
-        --cpu=1 \
-        --timeout=3600 \
-        --allow-unauthenticated \
-        --set-env-vars="UI_HOST=0.0.0.0,UI_PORT=8080,REACT_DEV_PORT=5173,DEBUG=true,LOG_LEVEL=DEBUG" \
-        --set-env-vars="MONGODB_CONNECTION_STRING=${MONGODB_CONNECTION_STRING},MONGODB_DATABASE=aristotlei_staging" \
-        --set-env-vars="GITHUB_TOKEN=${GITHUB_TOKEN}" \
-        --set-env-vars="PLANNER_LLM_KEY=${PLANNER_LLM_KEY},DEVELOPER_LLM_KEY=${DEVELOPER_LLM_KEY}" \
-        --set-env-vars="JIRA_SERVER=${JIRA_SERVER},JIRA_EMAIL=${JIRA_EMAIL},JIRA_TOKEN=${JIRA_TOKEN}" \
-        --min-instances=0 \
-        --max-instances=5 \
-        --concurrency=40 \
-        --labels=environment=staging,app=aristotlei,managed-by=gitlab-ci
-    - export SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME}-staging --region=${GCP_REGION} --format='value(status.url)')
-    - echo "✅ Staging deployment successful!"
-    - echo "🌐 Service URL=$SERVICE_URL"
-  environment:
-    name: staging
-  only:
-    - develop
-  when: on_success
 
 verify:production:
   stage: verify
   image: curlimages/curl:latest
   script:
-    - echo "🔍 Verifying production deployment..."
-    - sleep 30
-    - echo "✅ Verification checks passed!"
+    - echo "Verifying deployment"
+    - sleep 20
   environment:
     name: production
   only:
     - main
-  when: on_success
-
-verify:staging:
-  stage: verify
-  image: curlimages/curl:latest
-  script:
-    - echo "🔍 Verifying staging deployment..."
-    - sleep 20
-    - echo "✅ Staging verification passed!"
-  environment:
-    name: staging
-  only:
-    - develop
-  when: on_success
 
