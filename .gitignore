@@ -164,3 +164,4 @@ mongodb_data/
 created_project_files/
 deployment_documents/
 debug_json_failures/
+deployment/cloudrun-service.yaml
