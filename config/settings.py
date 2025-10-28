@@ -95,6 +95,9 @@ class Config:
     JIRA_TOKEN = os.getenv("JIRA_TOKEN")
     PROJECT_KEY = os.getenv("PROJECT_KEY")
 
+    # Recursive Project Creation
+    ENABLE_RECURSIVE_PROJECT_CREATION = os.getenv("ENABLE_RECURSIVE_PROJECT_CREATION").lower() == "true"
+
     # Additional paths
     STANDARDS_FOLDER = os.getenv("STANDARDS_FOLDER")
 

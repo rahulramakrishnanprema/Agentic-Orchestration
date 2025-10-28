@@ -14,13 +14,13 @@ COPY Agentic_UI/package*.json ./
 # Install dependencies
 RUN npm ci
 
-# Copy frontend source
+# Copy frontend source and config files
 COPY Agentic_UI/src ./src
-COPY Agentic_UI/public ./public 2>/dev/null || true
+COPY Agentic_UI/.env.* ./
 COPY Agentic_UI/*.config.* ./
+COPY Agentic_UI/*.config.ts ./
 COPY Agentic_UI/*.json ./
-COPY Agentic_UI/*.ts ./
-COPY Agentic_UI/*.tsx ./
+COPY Agentic_UI/*.js ./
 COPY Agentic_UI/index.html ./
 
 # Build frontend

@@ -58,8 +58,17 @@ class WorkflowNodes:
         state["thread_id"] = thread_id
         state["processing_stage"] = "trigger_processing"
 
+        # Initialize recursive project creation flag from config
+        from config.settings import config as app_config
+        state["create_recursive_project"] = app_config.ENABLE_RECURSIVE_PROJECT_CREATION
+
         log_activity(f"Workflow triggered by message: {state['trigger_message']}", thread_id)
         log_activity("Starting complete AI development workflow...", thread_id)
+
+        if state["create_recursive_project"]:
+            log_activity("Recursive project creation: ENABLED", thread_id)
+        else:
+            log_activity("Recursive project creation: DISABLED", thread_id)
 
         core.router.safe_stats_update({'workflows_executed': 1})
         return state
@@ -237,6 +246,98 @@ class WorkflowNodes:
 
         except Exception as error:
             state["error"] = f"Planning error: {error}"
+            return state
+
+    def node_create_recursive_project(self, state: 'RouterState') -> 'RouterState':
+        """Create a new JIRA project from subtasks and populate with issues"""
+        thread_id = state["thread_id"]
+        current_issue = state["current_issue"]
+        approved_subtasks = state.get("approved_subtasks", [])
+
+        if state.get("error"):
+            return state
+
+        # Check if recursive project creation is enabled
+        if not state.get("create_recursive_project", False):
+            logger.info(f"[WORKFLOW-{thread_id}] Recursive project creation disabled, skipping...")
+            return state
+
+        log_activity(f"Creating recursive JIRA project from issue: {current_issue['key']}", thread_id)
+
+        # Log: Starting project creation
+        core.router.safe_activity_log({
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "agent": "ProjectCreator",
+            "action": "Started",
+            "details": f"Creating new JIRA project from {current_issue['key']} with {len(approved_subtasks)} subtasks",
+            "status": "starting",
+            "issueId": current_issue['key']
+        })
+
+        try:
+            # Import the workflow to access project creation method
+            from workflows.jira_planner_workflow import JiraPlannerWorkflow
+
+            # Create workflow instance
+            jira_planner = JiraPlannerWorkflow(self.config)
+
+            # Create project and populate with subtask issues
+            result = jira_planner.create_project_from_subtasks(
+                issue_data=current_issue,
+                subtasks=approved_subtasks,
+                thread_id=thread_id
+            )
+
+            state["recursive_project_result"] = result
+
+            if result.get("success"):
+                state["recursive_project_key"] = result.get("project_key")
+                log_activity(
+                    f"Created recursive project {result.get('project_key')} with {result.get('total_issues', 0)} issues",
+                    thread_id
+                )
+
+                # Log: Project creation completed
+                core.router.safe_activity_log({
+                    "id": str(uuid.uuid4()),
+                    "timestamp": datetime.now().isoformat(),
+                    "agent": "ProjectCreator",
+                    "action": "Completed",
+                    "details": f"Successfully created project {result.get('project_key')} with {result.get('total_issues', 0)} issues",
+                    "status": "success",
+                    "issueId": current_issue['key'],
+                    "newProjectKey": result.get('project_key'),
+                    "createdIssues": result.get('created_issues', [])
+                })
+
+            else:
+                logger.warning(f"[WORKFLOW-{thread_id}] Recursive project creation failed: {result.get('error')}")
+                # Log: Project creation failed (non-critical, workflow continues)
+                core.router.safe_activity_log({
+                    "id": str(uuid.uuid4()),
+                    "timestamp": datetime.now().isoformat(),
+                    "agent": "ProjectCreator",
+                    "action": "Failed",
+                    "details": f"Failed to create recursive project: {result.get('error')}",
+                    "status": "warning",
+                    "issueId": current_issue['key']
+                })
+
+            return state
+
+        except Exception as error:
+            logger.error(f"[WORKFLOW-{thread_id}] Recursive project creation error: {error}")
+            # Log error but don't fail the workflow
+            core.router.safe_activity_log({
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "agent": "ProjectCreator",
+                "action": "Error",
+                "details": f"Exception during project creation: {str(error)}",
+                "status": "warning",
+                "issueId": current_issue['key']
+            })
             return state
 
     def node_assemble_document(self, state: 'RouterState') -> 'RouterState':

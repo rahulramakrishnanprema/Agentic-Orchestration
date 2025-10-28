@@ -34,6 +34,8 @@ mcp_stats = {
     'successful_fetches': 0,
     'failed_fetches': 0,
     'total_issues_fetched': 0,
+    'project_creations': 0,
+    'issue_creations': 0,
     'errors': 0
 }
 
@@ -379,12 +381,142 @@ def transition_issue(issue_key: str, transition_name: str, thread_id: str = "unk
         return False
 
 
+def create_jira_project_mcp_tool(project_name: str, project_key: str, description: str, thread_id: str) -> Dict[str, Any]:
+    """
+    Create a new JIRA project using MCP protocol.
+
+    Args:
+        project_name: Name of the project (e.g., "E-commerce Platform")
+        project_key: Project key (e.g., "ECOM") - must be uppercase, 2-10 chars
+        description: Project description
+        thread_id: Thread identifier for logging
+
+    Returns:
+        Dict with 'success', 'project_key', 'project_id', or 'error'
+    """
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_prefix = f"[{timestamp}] [MCP-JIRA-CREATE-PROJECT] [{thread_id}]"
+
+    update_mcp_stats('project_creations')
+
+    try:
+        with jira_lock:
+            logger.info(f"{log_prefix} Creating new JIRA project: {project_name} ({project_key})")
+            jira = get_jira_client()
+
+            # Get current user's account ID
+            logger.info(f"{log_prefix} Getting current user account ID...")
+            current_user = jira.myself()
+            account_id = current_user.get('accountId')
+            logger.info(f"{log_prefix} Current user account ID: {account_id}")
+
+            # Use MCP protocol - Direct REST API call for JIRA Cloud
+            logger.info(f"{log_prefix} Creating project via MCP REST API...")
+
+            project_data = {
+                'key': project_key.upper(),
+                'name': project_name,
+                'projectTypeKey': 'software',  # Software project type
+                'description': description,
+                'leadAccountId': account_id  # Use current user's account ID
+            }
+
+            # Make direct API call using MCP
+            response = jira._session.post(
+                f"{jira._options['server']}/rest/api/3/project",
+                json=project_data
+            )
+
+            if response.status_code in [200, 201]:
+                result = response.json()
+                project_id = result.get('id', result.get('key'))
+                project_key_returned = result.get('key')
+
+                logger.info(f"{log_prefix} Successfully created project {project_key_returned}: {project_id}")
+
+                return {
+                    'success': True,
+                    'project_key': project_key_returned.upper(),
+                    'project_id': str(project_id),
+                    'project_name': project_name,
+                    'created_at': datetime.now().isoformat()
+                }
+            else:
+                error_text = response.text
+                logger.error(f"{log_prefix} API returned status {response.status_code}: {error_text}")
+                raise JIRAError(status_code=response.status_code, text=error_text)
+
+    except Exception as e:
+        error_msg = f"Failed to create JIRA project: {str(e)}"
+        logger.error(f"{log_prefix} {error_msg}")
+        update_mcp_stats('errors')
+        return {
+            'success': False,
+            'error': error_msg
+        }
+
+
+def create_jira_issue_mcp_tool(project_key: str, summary: str, description: str,
+                               issue_type: str = "Task", thread_id: str = "unknown") -> Dict[str, Any]:
+    """
+    Create a new JIRA issue/subtask using MCP protocol.
+
+    Args:
+        project_key: Project key where issue should be created
+        summary: Issue summary/title
+        description: Issue description
+        issue_type: Type of issue (Task, Story, Bug, etc.)
+        thread_id: Thread identifier for logging
+
+    Returns:
+        Dict with 'success', 'issue_key', 'issue_id', or 'error'
+    """
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_prefix = f"[{timestamp}] [MCP-JIRA-CREATE-ISSUE] [{thread_id}]"
+
+    update_mcp_stats('issue_creations')
+
+    try:
+        with jira_lock:
+            logger.info(f"{log_prefix} Creating new JIRA issue in {project_key}: {summary}")
+            jira = get_jira_client()
+
+            # Create issue
+            issue_dict = {
+                'project': {'key': project_key},
+                'summary': summary,
+                'description': description,
+                'issuetype': {'name': issue_type},
+            }
+
+            new_issue = jira.create_issue(fields=issue_dict)
+
+            logger.info(f"{log_prefix} Successfully created issue {new_issue.key}: {new_issue.id}")
+
+            return {
+                'success': True,
+                'issue_key': new_issue.key,
+                'issue_id': new_issue.id,
+                'project_key': project_key,
+                'created_at': datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        error_msg = f"Failed to create JIRA issue: {str(e)}"
+        logger.error(f"{log_prefix} {error_msg}")
+        update_mcp_stats('errors')
+        return {
+            'success': False,
+            'error': error_msg
+        }
+
+
 def get_mcp_stats() -> Dict[str, Any]:
     """Get MCP JIRA tool statistics"""
     with stats_lock:
         return {
             "tool_type": "mcp_jira_client",
-            "version": "1.1",  # Updated with TODO fetch
+            "version": "1.2",  # Updated with project/issue creation
             "timestamp": datetime.now().isoformat(),
             "config": {
                 "server": config.JIRA_SERVER,
@@ -400,7 +532,9 @@ def get_mcp_stats() -> Dict[str, Any]:
                 "thread_safe_operations",
                 "comprehensive_logging",
                 "statistics_tracking",
-                "error_handling"
+                "error_handling",
+                "project_creation",
+                "issue_creation"
             ]
         }
 

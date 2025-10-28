@@ -1,5 +1,12 @@
 // src/services/api.ts
-const API_BASE_URL = 'http://localhost:5173/api'; // Add connection timeout and retry configuration
+// Use environment variable for API URL, fallback to localhost for development
+const API_BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : 'http://localhost:5173/api';
+
+console.log('API Base URL:', API_BASE_URL); // For debugging
+
+// Add connection timeout and retry configuration
 const REQUEST_TIMEOUT = 10000; // 10 seconds
 const MAX_RETRIES = 3; // Helper function for timeout handling
 const timeout = (ms: number): Promise<never> => {

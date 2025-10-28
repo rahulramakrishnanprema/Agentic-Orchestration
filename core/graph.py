@@ -72,6 +72,10 @@ class RouterState(TypedDict):
     developer_tokens: int
     reviewer_tokens: int
     rebuilder_tokens: int
+    # NEW: Fields for recursive project creation
+    create_recursive_project: bool  # Flag to enable/disable recursive project creation
+    recursive_project_result: Dict[str, Any]  # Result of project creation
+    recursive_project_key: Optional[str]  # Key of the created project
 
 class LangGraphWorkflow:
     """LangGraph workflow class - Handles graph building and workflow orchestration"""
@@ -101,6 +105,7 @@ class LangGraphWorkflow:
         workflow.add_node("jira_client", self.nodes.node_fetch_todo_issues)
         workflow.add_node("next_issue_processor", self.nodes.node_process_next_issue)
         workflow.add_node("planner_agent", self.nodes.node_plan_issue)
+        workflow.add_node("project_creator", self.nodes.node_create_recursive_project)  # NEW: Recursive project creation
         workflow.add_node("assembler_agent", self.nodes.node_assemble_document)
         workflow.add_node("hitl", hitl_pause)
         workflow.add_node("developer_agent", self.nodes.node_develop_code)
@@ -126,12 +131,15 @@ class LangGraphWorkflow:
         )
 
         workflow.add_conditional_edges("planner_agent", self._check_needs_human,
-                                       {"needs_human": "hitl", "approved": "assembler_agent", "error": "error_handler"})
+                                       {"needs_human": "hitl", "approved": "project_creator", "error": "error_handler"})
+
+        # NEW: After planning, create recursive project, then continue to assembler
+        workflow.add_edge("project_creator", "assembler_agent")
 
         workflow.add_edge("assembler_agent", "developer_agent")
 
         workflow.add_conditional_edges("hitl", self._route_human_decision,
-                                       {"approve": "assembler_agent", "reject": "planner_agent",
+                                       {"approve": "project_creator", "reject": "planner_agent",
                                         "error": "error_handler"})
 
         workflow.add_edge("developer_agent", "reviewer_agent")

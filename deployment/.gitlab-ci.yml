@@ -22,7 +22,7 @@ build:
   script:
     - export IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${IMAGE_NAME}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
     - export IMAGE_LATEST="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${IMAGE_NAME}/${IMAGE_NAME}:latest"
-    - docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
+    - docker build -f deployment/Dockerfile -t $IMAGE_TAG -t $IMAGE_LATEST .
     - docker push $IMAGE_TAG
     - docker push $IMAGE_LATEST
   only:

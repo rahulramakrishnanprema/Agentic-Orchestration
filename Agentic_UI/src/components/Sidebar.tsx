@@ -6,6 +6,7 @@ import {
   Settings
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import logo from '../assets/Aristotlei-logo.png';
 
 interface SidebarProps {
   activeTab: string;
@@ -31,8 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         <motion.img
           whileHover={{ scale: 1.1 }}
           transition={{ duration: 0.6 }}
-          src="/src/assets/Aristotlei-logo.png"
-          alt="AristotleI Logo" 
+          src={logo}
+          alt="AristotleI Logo"
           className="w-12 h-12 object-contain cursor-pointer"
         />
         <div>

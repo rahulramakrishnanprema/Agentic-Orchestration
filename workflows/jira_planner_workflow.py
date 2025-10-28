@@ -12,7 +12,7 @@ This keeps JIRA-specific logic separate from the core planning logic.
 import logging
 import threading
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pymongo import MongoClient
 
 from agents.core_planner_agent import CorePlannerAgent
@@ -215,6 +215,209 @@ class JiraPlannerWorkflow:
                 "error": str(e),
                 "needs_human": True,
                 "tokens_used": 0
+            }
+
+    def _generate_issue_summary_and_description(self, subtask: Dict[str, Any], thread_id: str) -> Dict[str, str]:
+        """
+        Use LLM to generate a concise summary. Description is the full subtask content.
+
+        Args:
+            subtask: Subtask dictionary with description
+            thread_id: Thread identifier
+
+        Returns:
+            {"summary": str, "description": str}
+        """
+        from services.llm_service import LLMService
+        from tools.prompt_loader import PromptLoader
+
+        # Get subtask details
+        subtask_desc = subtask.get('description', '')
+        subtask_reasoning = subtask.get('score_reasoning', '')
+
+        # Description is just the full subtask content
+        description = subtask_desc
+        if subtask_reasoning and subtask_reasoning != 'No additional details':
+            description += f"\n\n{subtask_reasoning}"
+
+        try:
+            logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Generating summary via LLM...")
+
+            # Format prompt
+            prompt_loader = PromptLoader("prompts")
+            formatted_prompt = prompt_loader.format(
+                "issue_summary_generation",
+                subtask_description=subtask_desc,
+                subtask_reasoning='',
+                priority=''
+            )
+
+            # Call LLM for summary only
+            llm_service = LLMService(
+                api_key=app_config.PLANNER_LLM_KEY,
+                api_url=app_config.PLANNER_LLM_URL,
+                model=app_config.PLANNER_LLM_MODEL,
+                temperature=app_config.PLANNER_LLM_TEMPERATURE,
+                max_tokens=app_config.PLANNER_LLM_MAX_TOKENS
+            )
+
+            response = llm_service.chat_completion(
+                messages=[{"role": "user", "content": formatted_prompt}]
+            )
+
+            content = response.get('content', '').strip()
+
+            # LLM outputs only the title (no prefix)
+            summary = content.split('\n')[0].strip()[:255]  # First line only
+
+            logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Summary: {summary}")
+
+            return {"summary": summary, "description": description}
+
+        except Exception as e:
+            logger.error(f"[JIRA-PROJECT-CREATOR-{thread_id}] LLM failed: {e}")
+            # Fallback: use first few words of subtask as summary
+            words = subtask_desc.split()[:6]
+            summary = ' '.join(words) if words else subtask_desc[:100]
+            return {"summary": summary, "description": description}
+
+    def create_project_from_subtasks(self, issue_data: Dict[str, Any], subtasks: List[Dict[str, Any]],
+                                     thread_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new JIRA project from subtasks or add tasks to existing project.
+        If project already exists, adds tasks to it instead of creating new one.
+
+        Args:
+            issue_data: Original JIRA issue data
+            subtasks: List of approved subtasks
+            thread_id: Optional thread identifier
+
+        Returns:
+            {
+                "success": bool,
+                "project_key": str,
+                "created_issues": List[str],
+                "error": Optional[str]
+            }
+        """
+        from tools.jira_client import get_jira_client, create_jira_project_mcp_tool, create_jira_issue_mcp_tool
+
+        if not thread_id:
+            thread_id = f"JIRA-PROJECT-CREATOR-{threading.current_thread().ident}"
+
+        issue_key = issue_data.get('key', 'UNKNOWN')
+        issue_summary = issue_data.get('summary', 'Project')
+
+        logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Processing {len(subtasks)} subtasks from {issue_key}")
+
+        try:
+            # Generate project key from summary
+            words = issue_summary.upper().split()
+            meaningful_words = [w for w in words if w not in ['THE', 'A', 'AN', 'AND', 'OR', 'FOR', 'TO', 'OF', 'IN', 'ON']]
+
+            if len(meaningful_words) >= 2:
+                project_key = ''.join([w[0] for w in meaningful_words[:4]])
+            elif len(meaningful_words) == 1:
+                project_key = meaningful_words[0][:4]
+            else:
+                project_key = ''.join([c for c in issue_summary.upper() if c.isalnum()])[:4]
+
+            if len(project_key) < 2:
+                project_key = project_key + "PR"
+            project_key = project_key[:10]
+
+            project_name = issue_summary
+
+            # Check if project already exists
+            logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Checking if project {project_key} exists...")
+
+            try:
+                jira = get_jira_client()
+                existing_project = jira.project(project_key)
+
+                # Project exists! Add tasks to it
+                logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Project {project_key} already exists. Adding tasks to existing project.")
+                created_project_key = project_key
+
+            except Exception as e:
+                # Project doesn't exist, create it
+                logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Project doesn't exist. Creating new project: {project_name} ({project_key})")
+
+                project_description = f"Auto-generated project from issue {issue_key}\n\n{issue_data.get('description', '')}"
+
+                project_result = create_jira_project_mcp_tool(
+                    project_name=project_name,
+                    project_key=project_key,
+                    description=project_description,
+                    thread_id=thread_id
+                )
+
+                if not project_result.get('success'):
+                    logger.error(f"[JIRA-PROJECT-CREATOR-{thread_id}] Failed to create project: {project_result.get('error')}")
+                    return {
+                        "success": False,
+                        "error": f"Project creation failed: {project_result.get('error')}"
+                    }
+
+                created_project_key = project_result.get('project_key')
+                logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Project created successfully: {created_project_key}")
+
+            # Create issues for each subtask with LLM-generated summaries and descriptions
+            created_issues = []
+            for idx, subtask in enumerate(subtasks, 1):
+                logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Processing subtask {idx}/{len(subtasks)}...")
+
+                # Use LLM to generate proper summary and description
+                generated = self._generate_issue_summary_and_description(subtask, thread_id)
+
+                subtask_summary = generated["summary"]
+                subtask_description = generated["description"]
+
+                logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Creating issue {idx}/{len(subtasks)}: {subtask_summary[:50]}...")
+                issue_result = create_jira_issue_mcp_tool(
+                    project_key=created_project_key,
+                    summary=subtask_summary,
+                    description=subtask_description,
+                    issue_type="Task",
+                    thread_id=thread_id
+                )
+
+                if issue_result.get('success'):
+                    created_issues.append(issue_result.get('issue_key'))
+                    logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Created issue: {issue_result.get('issue_key')}")
+                else:
+                    logger.warning(f"[JIRA-PROJECT-CREATOR-{thread_id}] Failed to create issue {idx}: {issue_result.get('error')}")
+
+            logger.info(f"[JIRA-PROJECT-CREATOR-{thread_id}] Project setup complete. Created {len(created_issues)}/{len(subtasks)} issues")
+
+            # Log to UI
+            import core.router
+            import uuid
+            core.router.safe_activity_log({
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "agent": "PlannerAgent",
+                "action": "Project Created",
+                "details": f"Created new project {created_project_key} with {len(created_issues)} issues from {issue_key}",
+                "status": "success",
+                "issueId": issue_key,
+                "newProjectKey": created_project_key,
+                "createdIssues": created_issues
+            })
+
+            return {
+                "success": True,
+                "project_key": created_project_key,
+                "project_name": project_name,
+                "created_issues": created_issues,
+                "total_issues": len(created_issues)
+            }
+
+        except Exception as e:
+            logger.error(f"[JIRA-PROJECT-CREATOR-{thread_id}] Exception: {e}")
+            return {
+                "success": False,
+                "error": str(e)
             }
 
     def create_langgraph_node(self):
