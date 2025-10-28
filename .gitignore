@@ -164,4 +164,8 @@ mongodb_data/
 created_project_files/
 deployment_documents/
 debug_json_failures/
+
+# Deployment files with secrets (use .template versions instead)
 deployment/cloudrun-service.yaml
+deployment/*.yaml
+!deployment/*.yaml.template
